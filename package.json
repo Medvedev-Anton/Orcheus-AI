@@ -1,0 +1,31 @@
+{
+  "name": "orcheus-ai",
+  "version": "1.0.0",
+  "description": "Desktop AI-coding assistant powered by Flowise",
+  "main": "main.js",
+  "scripts": {
+    "start": "chcp 65001 > nul && electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.orcheus-ai.app",
+    "productName": "Orcheus AI",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "prettier": "^3.8.1"
+  }
+}

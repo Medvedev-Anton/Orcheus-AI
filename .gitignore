@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+
+# Electron builder cache
+.cache/
+build/
+
+# Generated project files (создаются приложением)
+project/
+generated-project/
+
+# Settings (содержат токены)
+flowise-ide-settings.json
+orcheus-ai-settings.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Env files (на случай если появятся)
+.env
+.env.local
+.env.*

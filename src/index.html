@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
+  />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orcheus AI</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Title bar ── -->
+  <header id="titlebar">
+    <div class="tb-left">
+      <span class="app-icon">⚡</span>
+      <span class="app-name">Orcheus AI</span>
+    </div>
+    <div class="tb-center">
+      <span id="project-path-label" class="project-path"></span>
+    </div>
+    <div class="tb-right">
+      <button id="btn-open-folder" class="icon-btn" title="Открыть папку проекта в проводнике">📂</button>
+      <button id="btn-settings"    class="icon-btn" title="Настройки">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ── Three-panel layout ── -->
+  <div id="layout">
+
+    <!-- Left: File explorer -->
+    <aside id="sidebar">
+      <div class="panel-header">
+        <span>ПРОЕКТ</span>
+        <button id="btn-refresh" class="icon-btn-sm" title="Обновить дерево файлов">↺</button>
+      </div>
+      <div id="file-tree">
+        <p class="hint-text">Файлы появятся здесь после первой генерации</p>
+      </div>
+    </aside>
+
+    <div class="resizer" id="resizer-left"></div>
+
+    <!-- Center: Chat -->
+    <section id="chat-panel">
+      <div id="messages"></div>
+
+      <div id="input-area">
+        <textarea
+          id="chat-input"
+          placeholder="Опишите что нужно создать...&#10;(Ctrl + Enter — отправить)"
+          rows="3"
+          spellcheck="false"
+        ></textarea>
+        <div class="input-row">
+          <button id="btn-new-chat" class="sec-btn" title="Очистить чат и начать новый диалог">
+            ＋ Новый чат
+          </button>
+          <button id="btn-send" class="pri-btn">Отправить ▶</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="resizer" id="resizer-right"></div>
+
+    <!-- Right: Code preview / editor -->
+    <section id="code-panel">
+      <div id="code-header">
+        <span id="code-fname" class="code-fname">— нет файла —</span>
+        <div class="code-actions">
+          <button id="btn-edit"      class="icon-btn-sm" title="Редактировать файл">✏ Изменить</button>
+          <button id="btn-save-file" class="icon-btn-sm save-btn hidden" title="Сохранить файл">💾 Сохранить</button>
+          <button id="btn-discard"   class="icon-btn-sm hidden" title="Отменить изменения">✕</button>
+          <button id="btn-copy"      class="icon-btn-sm" title="Копировать код">⎘ Копировать</button>
+        </div>
+      </div>
+      <div id="code-wrap">
+        <div id="line-nums"></div>
+        <pre id="code-pre"></pre>
+        <textarea id="code-editor" class="hidden" spellcheck="false"></textarea>
+      </div>
+    </section>
+
+  </div><!-- /layout -->
+
+  <!-- ── Status bar ── -->
+  <footer id="statusbar">
+    <span id="st-text">Готов к работе</span>
+    <span class="st-sep">│</span>
+    <span id="st-root"></span>
+    <span id="st-count" class="st-right"></span>
+  </footer>
+
+</div><!-- /app -->
+
+<!-- ── Settings modal ── -->
+<div id="modal-settings" class="modal hidden" role="dialog" aria-modal="true" aria-label="Настройки">
+  <div class="modal-bg" id="modal-bg"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>⚙ Настройки подключения</h2>
+      <button id="btn-modal-close" class="icon-btn" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg">
+        <label for="s-url">Flowise URL</label>
+        <input id="s-url" type="url" placeholder="http://localhost:3000" autocomplete="off" />
+      </div>
+      <div class="fg">
+        <label for="s-flow-id">Flow ID</label>
+        <input id="s-flow-id" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" />
+      </div>
+      <div class="fg">
+        <label for="s-token">Bearer Token</label>
+        <input id="s-token" type="password" placeholder="Оставьте пустым если не требуется" autocomplete="off" />
+      </div>
+      <div class="fg">
+        <label for="s-root">Папка проекта</label>
+        <div class="fg-row">
+          <input id="s-root" type="text" placeholder="C:\Users\...\project" autocomplete="off" />
+          <button id="btn-pick" class="sec-btn">Обзор…</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button id="btn-save" class="pri-btn">Сохранить</button>
+      <button id="btn-cancel" class="sec-btn">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>
