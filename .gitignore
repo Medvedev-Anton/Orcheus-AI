@@ -17,6 +17,9 @@ generated-project/
 flowise-ide-settings.json
 orcheus-ai-settings.json
 
+# Переменные окружения (содержат секреты)
+.env
+
 # Logs
 *.log
 npm-debug.log*
@@ -33,4 +36,3 @@ desktop.ini
 # Env files (на случай если появятся)
 .env
 .env.local
-.env.*

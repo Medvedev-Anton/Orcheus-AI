@@ -442,9 +442,12 @@ body {
   position: absolute;
   inset: 0;
   background: rgba(0,0,0,.6);
+  z-index: 0;
+  pointer-events: none;
 }
 .modal-box {
   position: relative;
+  z-index: 1;
   background: #252526;
   border: 1px solid #555;
   border-radius: 8px;
@@ -503,6 +506,63 @@ body {
 .fg input:focus { border-color: var(--accent-h); }
 .fg-row { display: flex; gap: 8px; }
 .fg-row input { flex: 1; }
+
+/* ─── Auth modal ─────────────────────────────────────────────────────────────── */
+.auth-box { width: 380px; }
+
+.auth-head-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.auth-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.auth-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: color .15s, border-color .15s;
+  user-select: none;
+}
+.auth-tab:hover  { color: var(--text); }
+.auth-tab.active { color: var(--accent-fg); border-bottom-color: var(--accent-fg); }
+
+.auth-msg {
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 7px 10px;
+  margin: 0;
+}
+.auth-msg.hidden { display: none; }
+.auth-error { color: var(--error-fg); background: var(--error-bg); border: 1px solid var(--error-bd); }
+.auth-info  { color: var(--success); background: #0e2a22; border: 1px solid #1f5a42; }
+
+.auth-submit-btn { width: 100%; justify-content: center; }
+
+.user-email {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-right: 2px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+  align-self: center;
+}
+.auth-logout {
+  font-size: 12px;
+  padding: 3px 8px;
+}
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar            { width: 6px; height: 6px; }

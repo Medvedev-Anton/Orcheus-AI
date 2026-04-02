@@ -7,6 +7,12 @@ contextBridge.exposeInMainWorld('api', {
   loadSettings: ()         => ipcRenderer.invoke('settings:load'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
 
+  // Auth
+  getUser: ()                         => ipcRenderer.invoke('auth:get-user'),
+  signIn:  (email, password)          => ipcRenderer.invoke('auth:sign-in', { email, password }),
+  signUp:  (email, password)          => ipcRenderer.invoke('auth:sign-up', { email, password }),
+  signOut: ()                         => ipcRenderer.invoke('auth:sign-out'),
+
   // Flowise generation
   predict: (question, chatId) =>
     ipcRenderer.invoke('flowise:predict', { question, chatId }),

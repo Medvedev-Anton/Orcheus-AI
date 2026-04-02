@@ -7,6 +7,8 @@ let generating      = false;
 let unsubProgress   = null;
 let currentFilePath = null;
 let editMode        = false;
+let currentUser     = null;
+let authMode        = 'login'; // 'login' | 'register'
 
 // ─── DOM ──────────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -32,6 +34,18 @@ const elStText    = $('st-text');
 const elStRoot    = $('st-root');
 const elStCount   = $('st-count');
 const elPathLabel = $('project-path-label');
+
+// Auth modal
+const elModalAuth      = $('modal-auth');
+const elAuthEmail      = $('auth-email');
+const elAuthPass       = $('auth-password');
+const elAuthError      = $('auth-error');
+const elAuthInfo       = $('auth-info');
+const elBtnAuthSubmit  = $('btn-auth-submit');
+const elAuthTabLogin   = $('auth-tab-login');
+const elAuthTabReg     = $('auth-tab-register');
+const elUserEmail      = $('user-email');
+const elBtnLogout      = $('btn-logout');
 
 const elModal     = $('modal-settings');
 const elModalBg   = $('modal-bg');
@@ -75,15 +89,142 @@ function setStatus(text) {
   elStText.textContent = text;
 }
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+function showAuthModal() {
+  elModalAuth.classList.remove('hidden');
+  elAuthEmail.focus();
+}
+
+function hideAuthModal() {
+  elModalAuth.classList.add('hidden');
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  if (mode === 'login') {
+    elAuthTabLogin.classList.add('active');
+    elAuthTabReg.classList.remove('active');
+    elBtnAuthSubmit.textContent = 'Войти';
+    elAuthPass.autocomplete = 'current-password';
+  } else {
+    elAuthTabReg.classList.add('active');
+    elAuthTabLogin.classList.remove('active');
+    elBtnAuthSubmit.textContent = 'Создать аккаунт';
+    elAuthPass.autocomplete = 'new-password';
+  }
+  elAuthError.classList.add('hidden');
+  elAuthInfo.classList.add('hidden');
+}
+
+function showAuthError(msg) {
+  elAuthError.textContent = msg;
+  elAuthError.classList.remove('hidden');
+  elAuthInfo.classList.add('hidden');
+}
+
+function showAuthInfo(msg) {
+  elAuthInfo.textContent = msg;
+  elAuthInfo.classList.remove('hidden');
+  elAuthError.classList.add('hidden');
+}
+
+function applyAuthState(user) {
+  currentUser = user;
+  if (user) {
+    elUserEmail.textContent = user.email || '';
+    elBtnLogout.classList.remove('hidden');
+    elBtnSend.disabled = false;
+    elInput.disabled   = false;
+    elInput.placeholder = 'Опишите что нужно создать...\n(Ctrl + Enter — отправить)';
+  } else {
+    elUserEmail.textContent = '';
+    elBtnLogout.classList.add('hidden');
+    elBtnSend.disabled = true;
+    elInput.disabled   = true;
+    elInput.placeholder = 'Войдите в аккаунт для отправки запросов';
+  }
+}
+
+async function submitAuth() {
+  console.log('[Auth] submitAuth called, mode:', authMode);
+  const email    = elAuthEmail.value.trim();
+  const password = elAuthPass.value;
+
+  console.log('[Auth] email:', email, 'password length:', password.length);
+
+  if (!email || !password) { showAuthError('Заполните email и пароль'); return; }
+  if (password.length < 6)  { showAuthError('Пароль должен быть не менее 6 символов'); return; }
+
+  elBtnAuthSubmit.disabled = true;
+  elBtnAuthSubmit.textContent = '…';
+  elAuthError.classList.add('hidden');
+  elAuthInfo.classList.add('hidden');
+
+  try {
+    if (authMode === 'login') {
+      const result = await window.api.signIn(email, password);
+      if (result.ok) {
+        applyAuthState(result.user);
+        hideAuthModal();
+        addMsg('sys', `✅ Добро пожаловать, ${result.user.email}!`);
+      } else {
+        const msg = result.error || '';
+        if (msg.includes('Invalid login credentials'))
+          showAuthError('Неверный email или пароль');
+        else if (msg.includes('Email not confirmed'))
+          showAuthError('Email не подтверждён — проверьте почту и перейдите по ссылке в письме');
+        else
+          showAuthError(msg || 'Ошибка входа');
+      }
+    } else {
+      const result = await window.api.signUp(email, password);
+      if (result.ok) {
+        if (result.needsConfirmation) {
+          showAuthInfo('Аккаунт создан! Проверьте почту и перейдите по ссылке для подтверждения, затем войдите.');
+        } else {
+          applyAuthState(result.user);
+          hideAuthModal();
+          addMsg('sys', `✅ Аккаунт создан. Добро пожаловать, ${result.user.email}!`);
+        }
+      } else {
+        const msg = result.error || '';
+        if (msg.includes('rate limit'))
+          showAuthError('Слишком много попыток — подождите несколько минут и попробуйте снова');
+        else if (msg.includes('already registered') || msg.includes('User already registered'))
+          showAuthError('Этот email уже зарегистрирован — войдите или восстановите пароль');
+        else if (msg.includes('invalid email'))
+          showAuthError('Некорректный email');
+        else
+          showAuthError(msg || 'Ошибка регистрации');
+      }
+    }
+  } catch (err) {
+    console.error('[Auth] Неожиданная ошибка:', err);
+    showAuthError('Неожиданная ошибка: ' + err.message);
+  }
+
+  elBtnAuthSubmit.disabled = false;
+  setAuthMode(authMode); // restore button text
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   settings = await window.api.loadSettings();
   applySettingsToUi();
 
+  // Check auth — modal is visible by default; hide if already logged in
+  const authResult = await window.api.getUser();
+  applyAuthState(authResult.user);
+  if (authResult.user) {
+    hideAuthModal();
+  }
+
   // Subscribe to progress from main process
   unsubProgress = window.api.onProgress((msg) => addMsg('sys', msg));
 
   addMsg('sys', `⚡ Orcheus AI запущен. Flow ID: ${settings.flowId || '(не настроен)'}`);
+  if (authResult.user) addMsg('sys', `👤 Вы вошли как: ${authResult.user.email}`);
   addMsg('sys',  'Введите запрос и нажмите «Отправить» или Ctrl+Enter.');
 
   await refreshTree();
@@ -155,6 +296,7 @@ function removeThinking() {
 async function send() {
   const question = elInput.value.trim();
   if (!question || generating) return;
+  if (!currentUser) { showAuthModal(); return; }
 
   generating = true;
   elBtnSend.disabled = true;
@@ -447,12 +589,33 @@ $('btn-pick').addEventListener('click', async () => {
   if (result.ok) elSRoot.value = result.path;
 });
 
-// Close modal on Escape
+// Close settings modal on Escape
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !elModal.classList.contains('hidden')) closeModal();
 });
 
-// ─── Resizable panels ────────────────────────────────────────────────────────
+// Auth modal controls
+elAuthTabLogin.addEventListener('click', () => setAuthMode('login'));
+elAuthTabReg.addEventListener('click',   () => setAuthMode('register'));
+elBtnAuthSubmit.addEventListener('click', submitAuth);
+
+elAuthEmail.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') elAuthPass.focus();
+});
+elAuthPass.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitAuth();
+});
+
+elBtnLogout.addEventListener('click', async () => {
+  const result = await window.api.signOut();
+  if (result.ok) {
+    applyAuthState(null);
+    showAuthModal();
+    addMsg('sys', 'Вы вышли из аккаунта.');
+  }
+});
+
+// ─── Resizable panels ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function setupResizer(resizerId, onDelta) {
   const el = $(resizerId);
   if (!el) return;

@@ -23,6 +23,8 @@
       <span id="project-path-label" class="project-path"></span>
     </div>
     <div class="tb-right">
+      <span id="user-email" class="user-email"></span>
+      <button id="btn-logout" class="icon-btn auth-logout hidden" title="Выйти из аккаунта">⏋ Выйти</button>
       <button id="btn-open-folder" class="icon-btn" title="Открыть папку проекта в проводнике">📂</button>
       <button id="btn-settings"    class="icon-btn" title="Настройки">⚙️</button>
     </div>
@@ -95,6 +97,36 @@
   </footer>
 
 </div><!-- /app -->
+
+<!-- ── Auth modal ── -->
+<div id="modal-auth" class="modal" role="dialog" aria-modal="true" aria-label="Авторизация">
+  <div class="modal-bg"></div>
+  <div class="modal-box auth-box">
+    <div class="modal-head">
+      <h2>⚡ Orcheus AI</h2>
+      <span class="auth-head-sub">Вход / Регистрация</span>
+    </div>
+    <div class="auth-tabs">
+      <button id="auth-tab-login"    class="auth-tab active">Войти</button>
+      <button id="auth-tab-register" class="auth-tab">Регистрация</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg">
+        <label for="auth-email">Email</label>
+        <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="fg">
+        <label for="auth-password">Пароль</label>
+        <input id="auth-password" type="password" placeholder="Минимум 6 символов" autocomplete="current-password" />
+      </div>
+      <p id="auth-error" class="auth-msg auth-error hidden"></p>
+      <p id="auth-info"  class="auth-msg auth-info  hidden"></p>
+    </div>
+    <div class="modal-foot">
+      <button id="btn-auth-submit" class="pri-btn auth-submit-btn">Войти</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Settings modal ── -->
 <div id="modal-settings" class="modal hidden" role="dialog" aria-modal="true" aria-label="Настройки">

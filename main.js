@@ -1,11 +1,14 @@
 'use strict';
 
+require('dotenv').config();
+
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const fsp  = require('fs/promises');
 const http  = require('http');
 const https = require('https');
+const { createClient } = require('@supabase/supabase-js');
 
 // ─── Prettier formatter ──────────────────────────────────────────────────────────────
 let prettier = null;
@@ -64,6 +67,44 @@ function persistSettings(settings) {
   fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
 }
+
+// ─── Supabase Auth ───────────────────────────────────────────────────────────
+
+const SUPABASE_URL  = process.env.SUPABASE_URL;
+const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY;
+const SESSION_FILE  = path.join(app.getPath('userData'), 'orcheus-ai-session.json');
+
+if (!SUPABASE_URL || !SUPABASE_ANON) {
+  console.error('[Supabase] SUPABASE_URL или SUPABASE_ANON_KEY не заданы. Проверьте файл .env');
+}
+
+let _sessionStore = {};
+try {
+  if (fs.existsSync(SESSION_FILE)) {
+    _sessionStore = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+  }
+} catch { /* ignore */ }
+
+const _fileStorage = {
+  getItem:    (key)        => _sessionStore[key] ?? null,
+  setItem:    (key, value) => {
+    _sessionStore[key] = value;
+    try { fs.writeFileSync(SESSION_FILE, JSON.stringify(_sessionStore), 'utf8'); } catch { /* ignore */ }
+  },
+  removeItem: (key)        => {
+    delete _sessionStore[key];
+    try { fs.writeFileSync(SESSION_FILE, JSON.stringify(_sessionStore), 'utf8'); } catch { /* ignore */ }
+  },
+};
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: {
+    storage:            _fileStorage,
+    autoRefreshToken:   true,
+    persistSession:     true,
+    detectSessionInUrl: false,
+  },
+});
 
 // ─── Path safety ──────────────────────────────────────────────────────────────
 
@@ -287,7 +328,10 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  });
 
   // DevTools по Ctrl+Shift+I
   const { globalShortcut } = require('electron');
@@ -312,6 +356,14 @@ ipcMain.handle('settings:save', (_e, settings) => {
 });
 
 ipcMain.handle('flowise:predict', async (event, { question, chatId }) => {
+  // Auth gate
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'Необходима авторизация. Войдите в аккаунт.' };
+  } catch {
+    return { ok: false, error: 'Ошибка проверки авторизации.' };
+  }
+
   const settings = loadSettings();
   const send = event.sender;
   const progress = (msg) => {
@@ -385,6 +437,57 @@ ipcMain.handle('dialog:pick-folder', async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return { ok: false };
   return { ok: true, path: result.filePaths[0] };
+});
+
+// ─── Auth IPC ────────────────────────────────────────────────────────────────
+
+ipcMain.handle('auth:get-user', async () => {
+  console.log('[Auth] get-user');
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('[Auth] get-user result:', user ? user.email : 'null');
+    return { ok: true, user: user ?? null };
+  } catch (err) {
+    console.error('[Auth] get-user error:', err.message);
+    return { ok: true, user: null };
+  }
+});
+
+ipcMain.handle('auth:sign-in', async (_e, { email, password }) => {
+  console.log('[Auth] sign-in attempt:', email);
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { console.error('[Auth] sign-in error:', error.message); return { ok: false, error: error.message }; }
+    console.log('[Auth] sign-in ok:', data.user.email);
+    return { ok: true, user: data.user };
+  } catch (err) {
+    console.error('[Auth] sign-in exception:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('auth:sign-up', async (_e, { email, password }) => {
+  console.log('[Auth] sign-up attempt:', email);
+  try {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) { console.error('[Auth] sign-up error:', error.message); return { ok: false, error: error.message }; }
+    console.log('[Auth] sign-up ok, session:', !!data.session);
+    return { ok: true, user: data.user, needsConfirmation: !data.session };
+  } catch (err) {
+    console.error('[Auth] sign-up exception:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('auth:sign-out', async () => {
+  console.log('[Auth] sign-out');
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────

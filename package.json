@@ -20,8 +20,13 @@
     "files": [
       "main.js",
       "preload.js",
-      "src/**/*"
+      "src/**/*",
+      ".env"
     ]
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "dotenv": "^17.3.1"
   },
   "devDependencies": {
     "electron": "^28.3.3",
