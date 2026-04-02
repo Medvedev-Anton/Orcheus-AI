@@ -33,4 +33,11 @@ contextBridge.exposeInMainWorld('api', {
   // Shell / dialogs
   openFolder: ()  => ipcRenderer.invoke('shell:open-folder'),
   pickFolder: ()  => ipcRenderer.invoke('dialog:pick-folder'),
+
+  // Chat history
+  createChat:       (title)                        => ipcRenderer.invoke('chats:create',       { title }),
+  listChats:        ()                             => ipcRenderer.invoke('chats:list'),
+  loadChatMessages: (chatId)                       => ipcRenderer.invoke('chats:load-messages', { chatId }),
+  deleteChat:       (chatId)                       => ipcRenderer.invoke('chats:delete',        { chatId }),
+  saveMessage:      (chatId, role, content, files) => ipcRenderer.invoke('messages:save',       { chatId, role, content, files }),
 });

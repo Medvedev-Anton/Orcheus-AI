@@ -3,6 +3,7 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let settings        = {};
 let chatId          = genId();
+let currentChatDbId = null; // UUID чата в Supabase
 let generating      = false;
 let unsubProgress   = null;
 let currentFilePath = null;
@@ -34,6 +35,13 @@ const elStText    = $('st-text');
 const elStRoot    = $('st-root');
 const elStCount   = $('st-count');
 const elPathLabel = $('project-path-label');
+
+// Sidebar tabs & chat list
+const elTabChats      = $('tab-chats');
+const elTabFiles      = $('tab-files');
+const elChatListPanel = $('chat-list-panel');
+const elFilePanel     = $('file-panel');
+const elChatList      = $('chat-list');
 
 // Auth modal
 const elModalAuth      = $('modal-auth');
@@ -129,6 +137,107 @@ function showAuthInfo(msg) {
   elAuthError.classList.add('hidden');
 }
 
+// ─── Chat history ─────────────────────────────────────────────────────────────
+
+function formatChatDate(isoStr) {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  } catch { return ''; }
+}
+
+async function loadChatList() {
+  if (!currentUser) return;
+  const result = await window.api.listChats();
+  renderChatList(result.ok ? result.chats : []);
+}
+
+function renderChatList(chats) {
+  elChatList.innerHTML = '';
+  if (!chats || chats.length === 0) {
+    elChatList.innerHTML = '<p class="hint-text">Нет сохранённых чатов.<br>Отправьте сообщение, чтобы начать.</p>';
+    return;
+  }
+  for (const chat of chats) {
+    const item = document.createElement('div');
+    item.className = 'chat-item' + (chat.id === currentChatDbId ? ' active' : '');
+    item.dataset.id = chat.id;
+
+    const info = document.createElement('div');
+    info.className = 'chat-item-info';
+
+    const title = document.createElement('div');
+    title.className = 'chat-item-title';
+    title.textContent = chat.title || 'Чат';
+
+    const date = document.createElement('div');
+    date.className = 'chat-item-date';
+    date.textContent = formatChatDate(chat.updated_at);
+
+    info.appendChild(title);
+    info.appendChild(date);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'chat-item-del';
+    delBtn.title = 'Удалить чат';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const res = await window.api.deleteChat(chat.id);
+      if (res.ok) {
+        if (currentChatDbId === chat.id) {
+          currentChatDbId = null;
+          chatId = genId();
+          elMessages.innerHTML = '';
+          addMsg('sys', 'Чат удалён. Начните новый или выберите другой из списка.');
+        }
+        await loadChatList();
+      }
+    });
+
+    item.appendChild(info);
+    item.appendChild(delBtn);
+    item.addEventListener('click', () => switchToChat(chat.id, chat.title));
+    elChatList.appendChild(item);
+  }
+}
+
+async function switchToChat(dbId, title) {
+  currentChatDbId = dbId;
+  chatId = dbId;
+  elMessages.innerHTML = '';
+  document.querySelectorAll('.chat-item').forEach((el) =>
+    el.classList.toggle('active', el.dataset.id === dbId)
+  );
+  setStatus('Загружаем историю...');
+  const result = await window.api.loadChatMessages(dbId);
+  if (result.ok) {
+    if (result.messages.length > 0) {
+      for (const msg of result.messages) {
+        addMsg(msg.role, msg.content, msg.files || []);
+      }
+    } else {
+      addMsg('sys', `💬 ${title || 'Чат'} — история пуста`);
+    }
+  } else {
+    addMsg('err', 'Не удалось загрузить историю: ' + result.error);
+  }
+  setStatus('Готов к работе');
+}
+
+function startNewChat() {
+  currentChatDbId = null;
+  chatId = genId();
+  elMessages.innerHTML = '';
+  document.querySelectorAll('.chat-item').forEach((el) => el.classList.remove('active'));
+  addMsg('sys', '🆕 Новый чат начат. Контекст предыдущего диалога сброшен.');
+}
+
 function applyAuthState(user) {
   currentUser = user;
   if (user) {
@@ -137,12 +246,16 @@ function applyAuthState(user) {
     elBtnSend.disabled = false;
     elInput.disabled   = false;
     elInput.placeholder = 'Опишите что нужно создать...\n(Ctrl + Enter — отправить)';
+    loadChatList();
   } else {
     elUserEmail.textContent = '';
     elBtnLogout.classList.add('hidden');
     elBtnSend.disabled = true;
     elInput.disabled   = true;
     elInput.placeholder = 'Войдите в аккаунт для отправки запросов';
+    currentChatDbId = null;
+    chatId = genId();
+    renderChatList([]);
   }
 }
 
@@ -298,6 +411,16 @@ async function send() {
   if (!question || generating) return;
   if (!currentUser) { showAuthModal(); return; }
 
+  // Создаём чат в БД при первом сообщении
+  if (!currentChatDbId) {
+    const chatTitle = question.length > 60 ? question.slice(0, 60) + '…' : question;
+    const chatResult = await window.api.createChat(chatTitle);
+    if (chatResult.ok) {
+      currentChatDbId = chatResult.chat.id;
+      chatId = chatResult.chat.id;
+    }
+  }
+
   generating = true;
   elBtnSend.disabled = true;
   elBtnSend.textContent = '...';
@@ -306,6 +429,11 @@ async function send() {
   addMsg('user', question);
   const thinking = addThinking();
   setStatus('Генерируем...');
+
+  // Сохраняем сообщение пользователя в БД
+  if (currentChatDbId) {
+    window.api.saveMessage(currentChatDbId, 'user', question, []).catch(console.error);
+  }
 
   const result = await window.api.predict(question, chatId);
 
@@ -316,16 +444,27 @@ async function send() {
 
   if (result.ok) {
     const n = result.files.length;
-    addMsg('ai', `✅ Готово! Записано файлов: ${n}`, result.files);
+    const aiText = `✅ Готово! Записано файлов: ${n}`;
+    addMsg('ai', aiText, result.files);
     setStatus(`Готово — ${n} файл(ов) сгенерировано`);
+    // Сохраняем ответ AI в БД
+    if (currentChatDbId) {
+      window.api.saveMessage(currentChatDbId, 'ai', aiText, result.files).catch(console.error);
+      loadChatList(); // обновляем updated_at в списке
+    }
     await refreshTree();
     if (result.files.length > 0) {
       const first = result.files[0];
       await openFile(first.fullPath, first.name);
     }
   } else {
-    addMsg('err', result.error || 'Неизвестная ошибка');
+    const errText = result.error || 'Неизвестная ошибка';
+    addMsg('err', errText);
     setStatus('Ошибка');
+    // Сохраняем ошибку в БД
+    if (currentChatDbId) {
+      window.api.saveMessage(currentChatDbId, 'err', errText, []).catch(console.error);
+    }
   }
 }
 
@@ -525,17 +664,28 @@ elInput.addEventListener('keydown', (e) => {
   }
 });
 
-elBtnNew.addEventListener('click', () => {
-  chatId = genId();
-  elMessages.innerHTML = '';
-  addMsg('sys', '🆕 Новый чат начат. Контекст предыдущего диалога сброшен.');
-});
+elBtnNew.addEventListener('click', () => startNewChat());
 
 elBtnSett.addEventListener('click', openModal);
 
 elBtnFolder.addEventListener('click', () => window.api.openFolder());
 
 elBtnRef.addEventListener('click', refreshTree);
+
+// Переключение вкладок сайдбара
+elTabChats.addEventListener('click', () => {
+  elTabChats.classList.add('active');
+  elTabFiles.classList.remove('active');
+  elChatListPanel.classList.remove('hidden');
+  elFilePanel.classList.add('hidden');
+});
+
+elTabFiles.addEventListener('click', () => {
+  elTabFiles.classList.add('active');
+  elTabChats.classList.remove('active');
+  elFilePanel.classList.remove('hidden');
+  elChatListPanel.classList.add('hidden');
+});
 
 elBtnCopy.addEventListener('click', async () => {
   const code = editMode ? elCodeEditor.value : elCodePre.textContent;

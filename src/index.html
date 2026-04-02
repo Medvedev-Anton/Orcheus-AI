@@ -33,14 +33,29 @@
   <!-- ── Three-panel layout ── -->
   <div id="layout">
 
-    <!-- Left: File explorer -->
+    <!-- Left: File explorer + Chat list -->
     <aside id="sidebar">
-      <div class="panel-header">
-        <span>ПРОЕКТ</span>
-        <button id="btn-refresh" class="icon-btn-sm" title="Обновить дерево файлов">↺</button>
+      <div class="sidebar-tabs">
+        <button id="tab-chats" class="sidebar-tab active" title="История чатов">💬 Чаты</button>
+        <button id="tab-files" class="sidebar-tab" title="Файлы проекта">📁 Проект</button>
       </div>
-      <div id="file-tree">
-        <p class="hint-text">Файлы появятся здесь после первой генерации</p>
+
+      <!-- Chat list panel -->
+      <div id="chat-list-panel">
+        <div id="chat-list">
+          <p class="hint-text">Войдите в аккаунт, чтобы увидеть историю чатов</p>
+        </div>
+      </div>
+
+      <!-- File tree panel -->
+      <div id="file-panel" class="hidden">
+        <div class="panel-header">
+          <span>ПРОЕКТ</span>
+          <button id="btn-refresh" class="icon-btn-sm" title="Обновить дерево файлов">↺</button>
+        </div>
+        <div id="file-tree">
+          <p class="hint-text">Файлы появятся здесь после первой генерации</p>
+        </div>
       </div>
     </aside>
 

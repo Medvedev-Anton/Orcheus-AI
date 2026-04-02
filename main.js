@@ -490,6 +490,113 @@ ipcMain.handle('auth:sign-out', async () => {
   }
 });
 
+// ─── Chat history IPC ─────────────────────────────────────────────────────────
+
+ipcMain.handle('chats:create', async (_e, { title }) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'Не авторизован' };
+    const safeTitle = typeof title === 'string' && title.trim() ? title.trim().slice(0, 200) : 'Новый чат';
+    const { data, error } = await supabase
+      .from('chats')
+      .insert({ user_id: user.id, title: safeTitle })
+      .select()
+      .single();
+    if (error) { console.error('[Chats] create error:', error.message); return { ok: false, error: error.message }; }
+    console.log('[Chats] created:', data.id);
+    return { ok: true, chat: data };
+  } catch (err) {
+    console.error('[Chats] create exception:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('chats:list', async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'Не авторизован', chats: [] };
+    const { data, error } = await supabase
+      .from('chats')
+      .select('id, title, created_at, updated_at')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(100);
+    if (error) { console.error('[Chats] list error:', error.message); return { ok: false, error: error.message, chats: [] }; }
+    return { ok: true, chats: data || [] };
+  } catch (err) {
+    console.error('[Chats] list exception:', err.message);
+    return { ok: false, error: err.message, chats: [] };
+  }
+});
+
+ipcMain.handle('chats:load-messages', async (_e, { chatId }) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'Не авторизован', messages: [] };
+    if (!chatId) return { ok: false, error: 'chatId обязателен', messages: [] };
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id, role, content, files, created_at')
+      .eq('chat_id', chatId)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+    if (error) { console.error('[Chats] load-messages error:', error.message); return { ok: false, error: error.message, messages: [] }; }
+    return { ok: true, messages: data || [] };
+  } catch (err) {
+    console.error('[Chats] load-messages exception:', err.message);
+    return { ok: false, error: err.message, messages: [] };
+  }
+});
+
+ipcMain.handle('chats:delete', async (_e, { chatId }) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'Не авторизован' };
+    if (!chatId) return { ok: false, error: 'chatId обязателен' };
+    const { error } = await supabase
+      .from('chats')
+      .delete()
+      .eq('id', chatId)
+      .eq('user_id', user.id);
+    if (error) { console.error('[Chats] delete error:', error.message); return { ok: false, error: error.message }; }
+    console.log('[Chats] deleted:', chatId);
+    return { ok: true };
+  } catch (err) {
+    console.error('[Chats] delete exception:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('messages:save', async (_e, { chatId, role, content, files }) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'Не авторизован' };
+    if (!chatId) return { ok: false, error: 'chatId обязателен' };
+    const allowedRoles = ['user', 'ai', 'err'];
+    if (!allowedRoles.includes(role)) return { ok: false, error: 'Недопустимая роль: ' + role };
+
+    const safeFiles = Array.isArray(files) ? files : [];
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({ chat_id: chatId, user_id: user.id, role, content: content ?? '', files: safeFiles })
+      .select('id')
+      .single();
+    if (error) { console.error('[Messages] save error:', error.message); return { ok: false, error: error.message }; }
+
+    // Bump chat updated_at
+    await supabase
+      .from('chats')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', chatId)
+      .eq('user_id', user.id);
+
+    return { ok: true, id: data.id };
+  } catch (err) {
+    console.error('[Messages] save exception:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
