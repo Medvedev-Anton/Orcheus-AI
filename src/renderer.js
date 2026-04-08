@@ -57,10 +57,8 @@ const elBtnLogout      = $('btn-logout');
 
 const elModal     = $('modal-settings');
 const elModalBg   = $('modal-bg');
-const elSUrl      = $('s-url');
-const elSFlowId   = $('s-flow-id');
-const elSToken    = $('s-token');
 const elSRoot     = $('s-root');
+const elSTheme    = $('s-theme');
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 function genId() {
@@ -323,6 +321,7 @@ async function submitAuth() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
+  applyTheme(localStorage.getItem('theme') || 'dark');
   settings = await window.api.loadSettings();
   applySettingsToUi();
 
@@ -336,9 +335,9 @@ async function init() {
   // Subscribe to progress from main process
   unsubProgress = window.api.onProgress((msg) => addMsg('sys', msg));
 
-  addMsg('sys', `⚡ Orcheus AI запущен. Flow ID: ${settings.flowId || '(не настроен)'}`);
+  addMsg('sys', '⚡ Orcheus AI готов к работе.');
   if (authResult.user) addMsg('sys', `👤 Вы вошли как: ${authResult.user.email}`);
-  addMsg('sys',  'Введите запрос и нажмите «Отправить» или Ctrl+Enter.');
+  addMsg('sys', 'Введите запрос и нажмите «Отправить» или Ctrl+Enter.');
 
   await refreshTree();
 }
@@ -621,12 +620,10 @@ async function saveCurrentFile() {
 
 // ─── Settings modal ───────────────────────────────────────────────────────────
 function openModal() {
-  elSUrl.value    = settings.flowiseUrl || '';
-  elSFlowId.value = settings.flowId     || '';
-  elSToken.value  = settings.token      || '';
   elSRoot.value   = settings.projectRoot || '';
+  elSTheme.value  = localStorage.getItem('theme') || 'dark';
   elModal.classList.remove('hidden');
-  elSUrl.focus();
+  elSRoot.focus();
 }
 
 function closeModal() {
@@ -635,17 +632,21 @@ function closeModal() {
 
 async function saveSettings() {
   const updated = {
-    flowiseUrl:  elSUrl.value.trim()    || 'http://localhost:3000',
-    flowId:      elSFlowId.value.trim() || '',
-    token:       elSToken.value.trim()  || '',
-    projectRoot: elSRoot.value.trim()   || settings.projectRoot,
+    projectRoot: elSRoot.value.trim() || settings.projectRoot,
   };
   await window.api.saveSettings(updated);
   settings = updated;
+  applyTheme(elSTheme.value);
   applySettingsToUi();
   closeModal();
   addMsg('sys', '✅ Настройки сохранены.');
   await refreshTree();
+}
+
+function applyTheme(theme) {
+  const t = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('theme', t);
 }
 
 function applySettingsToUi() {

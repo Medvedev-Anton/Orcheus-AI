@@ -148,28 +148,23 @@
   <div class="modal-bg" id="modal-bg"></div>
   <div class="modal-box">
     <div class="modal-head">
-      <h2>⚙ Настройки подключения</h2>
+      <h2>⚙ Настройки проекта</h2>
       <button id="btn-modal-close" class="icon-btn" aria-label="Закрыть">✕</button>
     </div>
     <div class="modal-body">
-      <div class="fg">
-        <label for="s-url">Flowise URL</label>
-        <input id="s-url" type="url" placeholder="http://localhost:3000" autocomplete="off" />
-      </div>
-      <div class="fg">
-        <label for="s-flow-id">Flow ID</label>
-        <input id="s-flow-id" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" />
-      </div>
-      <div class="fg">
-        <label for="s-token">Bearer Token</label>
-        <input id="s-token" type="password" placeholder="Оставьте пустым если не требуется" autocomplete="off" />
-      </div>
       <div class="fg">
         <label for="s-root">Папка проекта</label>
         <div class="fg-row">
           <input id="s-root" type="text" placeholder="C:\Users\...\project" autocomplete="off" />
           <button id="btn-pick" class="sec-btn">Обзор…</button>
         </div>
+      </div>
+      <div class="fg">
+        <label for="s-theme">Тема оформления</label>
+        <select id="s-theme" class="theme-select">
+          <option value="dark">🌙 Тёмная</option>
+          <option value="light">☀️ Светлая</option>
+        </select>
       </div>
     </div>
     <div class="modal-foot">

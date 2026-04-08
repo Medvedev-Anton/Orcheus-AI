@@ -19,12 +19,57 @@
   --user-bg:     #0a3a5c;
   --user-bd:     #1a5c8a44;
   --status-bar:  #007acc;
+  --titlebar-bg: #2d2d2d;
+  --code-bg:     #1a1a1a;
+  --code-header-bg: #2a2a2a;
+  --line-nums-bg:#252525;
+  --modal-bg:    #252526;
+  --modal-border:#555;
+  --chip-bg:     #0d3550;
+  --chip-bd:     #1a5078;
+  --chip-bg-h:   #1a5078;
+  --scrollbar:   #424242;
+  --scrollbar-h: #555;
   --font-code:   'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace;
   --font-ui:     'Segoe UI', system-ui, sans-serif;
   --sidebar-w:   260px;
   --code-w:      400px;
   --header-h:    40px;
   --status-h:    24px;
+}
+
+/* ─── Light theme ────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:          #f5f5f5;
+  --bg-panel:    #ffffff;
+  --bg-input:    #f0f0f0;
+  --bg-hover:    #e8e8e8;
+  --bg-active:   #cce5ff;
+  --border:      #d0d0d0;
+  --text:        #333333;
+  --text-dim:    #888888;
+  --text-bright: #111111;
+  --accent:      #0078d4;
+  --accent-h:    #005fa3;
+  --accent-fg:   #0063b1;
+  --success:     #107c10;
+  --error-bg:    #fde7e9;
+  --error-bd:    #f1a3aa;
+  --error-fg:    #c42b1c;
+  --user-bg:     #dbeeff;
+  --user-bd:     #90c8f0;
+  --status-bar:  #0078d4;
+  --titlebar-bg: #e8e8e8;
+  --code-bg:     #fafafa;
+  --code-header-bg: #efefef;
+  --line-nums-bg:#f0f0f0;
+  --modal-bg:    #ffffff;
+  --modal-border:#c0c0c0;
+  --chip-bg:     #dbeeff;
+  --chip-bd:     #90c8f0;
+  --chip-bg-h:   #c2dcf7;
+  --scrollbar:   #c8c8c8;
+  --scrollbar-h: #aaaaaa;
 }
 
 /* ─── Reset ─────────────────────────────────────────────────────────────────── */
@@ -53,7 +98,7 @@ body {
   display: flex;
   align-items: center;
   height: var(--header-h);
-  background: #2d2d2d;
+  background: var(--titlebar-bg);
   border-bottom: 1px solid var(--border);
   padding: 0 10px;
   flex-shrink: 0;
@@ -228,7 +273,7 @@ body {
 .t-icon { font-size: 13px; flex-shrink: 0; }
 .t-label { overflow: hidden; text-overflow: ellipsis; }
 .t-dir { font-weight: 500; color: var(--text); }
-.t-file { color: #d4d4d4; }
+.t-file { color: var(--text); }
 
 /* ─── Chat panel ─────────────────────────────────────────────────────────────── */
 #chat-panel {
@@ -298,8 +343,8 @@ body {
 /* File chips */
 .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .chip {
-  background: #0d3550;
-  border: 1px solid #1a5078;
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-bd);
   color: var(--accent-fg);
   border-radius: 4px;
   padding: 2px 9px;
@@ -308,7 +353,7 @@ body {
   cursor: pointer;
   transition: background .15s;
 }
-.chip:hover { background: #1a5078; }
+.chip:hover { background: var(--chip-bg-h); }
 
 /* Thinking animation */
 .dots { display: inline-flex; gap: 5px; padding: 6px 4px; }
@@ -373,7 +418,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 5px 10px;
-  background: #2a2a2a;
+  background: var(--code-header-bg);
   border-bottom: 1px solid var(--border);
   gap: 8px;
   flex-shrink: 0;
@@ -405,7 +450,7 @@ body {
   text-align: right;
   padding: 14px 10px 14px 12px;
   white-space: pre;
-  background: #252525;
+  background: var(--line-nums-bg);
   border-right: 1px solid var(--border);
   user-select: none;
   min-width: 40px;
@@ -417,7 +462,7 @@ body {
   margin: 0;
   padding: 14px;
   white-space: pre;
-  color: #d4d4d4;
+  color: var(--text);
   background: transparent;
   overflow: visible;
   font-family: inherit;
@@ -430,8 +475,8 @@ body {
   margin: 0;
   padding: 14px;
   white-space: pre;
-  color: #d4d4d4;
-  background: #1a1a1a;
+  color: var(--text);
+  background: var(--code-bg);
   border: none;
   outline: none;
   resize: none;
@@ -533,8 +578,8 @@ body {
 .modal-box {
   position: relative;
   z-index: 1;
-  background: #252526;
-  border: 1px solid #555;
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-border);
   border-radius: 8px;
   width: 500px;
   max-width: 94vw;
@@ -652,5 +697,26 @@ body {
 /* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar            { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track      { background: transparent; }
-::-webkit-scrollbar-thumb      { background: #424242; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover{ background: #555; }
+::-webkit-scrollbar-thumb      { background: var(--scrollbar); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover{ background: var(--scrollbar-h); }
+
+/* ─── Theme select ───────────────────────────────────────────────────────────── */
+.theme-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  padding: 7px 9px;
+  width: 100%;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.theme-select:focus { border-color: var(--accent-h); }
+
+/* ─── Theme transition ───────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  transition: background-color .2s ease, border-color .2s ease, color .15s ease;
+}
