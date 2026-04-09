@@ -36,3 +36,6 @@ desktop.ini
 # Env files (на случай если появятся)
 .env
 .env.local
+
+# Supabase CLI temp files
+supabase/.temp/

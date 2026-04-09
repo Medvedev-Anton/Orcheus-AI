@@ -59,6 +59,9 @@ const elModal     = $('modal-settings');
 const elModalBg   = $('modal-bg');
 const elSRoot     = $('s-root');
 const elSTheme    = $('s-theme');
+const elSUrl      = $('s-url');
+const elSFlowId   = $('s-flow-id');
+const elSToken    = $('s-token');
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 function genId() {
@@ -620,10 +623,13 @@ async function saveCurrentFile() {
 
 // ─── Settings modal ───────────────────────────────────────────────────────────
 function openModal() {
+  elSUrl.value    = settings.flowiseUrl || '';
+  elSFlowId.value = settings.flowId    || '';
+  elSToken.value  = settings.token     || '';
   elSRoot.value   = settings.projectRoot || '';
   elSTheme.value  = localStorage.getItem('theme') || 'dark';
   elModal.classList.remove('hidden');
-  elSRoot.focus();
+  elSUrl.focus();
 }
 
 function closeModal() {
@@ -632,7 +638,10 @@ function closeModal() {
 
 async function saveSettings() {
   const updated = {
-    projectRoot: elSRoot.value.trim() || settings.projectRoot,
+    flowiseUrl:  elSUrl.value.trim()    || settings.flowiseUrl,
+    flowId:      elSFlowId.value.trim() || settings.flowId,
+    token:       elSToken.value.trim(),
+    projectRoot: elSRoot.value.trim()   || settings.projectRoot,
   };
   await window.api.saveSettings(updated);
   settings = updated;
