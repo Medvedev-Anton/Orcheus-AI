@@ -90,17 +90,50 @@ npm start
 ## Структура проекта
 
 ```
-program/
-├── main.js              # Главный процесс Electron: HTTP запросы, файлы, IPC, Supabase Auth
-├── preload.js           # contextBridge — безопасный мост main ↔ renderer
-├── flowise-save.mjs     # CLI-скрипт (оригинальный, работает самостоятельно)
-├── .env                 # Секреты (не пушить в git!)
-├── .env.example         # Шаблон переменных окружения
+orcheus-ai/
+├── main.js                    # Точка входа главного процесса
+├── preload.js                 # contextBridge — безопасный мост main ↔ renderer
+├── flowise-save.mjs           # CLI-скрипт (работает независимо)
+├── .env                       # Секреты (не пушить в git!)
+├── .env.example               # Шаблон переменных окружения
 ├── package.json
 └── src/
-    ├── index.html       # Разметка интерфейса
-    ├── styles.css       # Тёмная тема
-    └── renderer.js      # Логика UI
+    ├── index.html             # Разметка интерфейса
+    ├── styles.css             # Тёмная тема
+    ├── renderer.js            # Точка входа UI
+    ├── main/                  # Модули главного процесса
+    │   ├── config/            # Константы и настройки
+    │   │   ├── constants.js   # Константы приложения
+    │   │   └── settings.js    # Управление настройками
+    │   ├── services/          # Бизнес-логика
+    │   │   ├── auth.js        # Авторизация Supabase
+    │   │   ├── flowise.js     # Flowise API клиент
+    │   │   ├── files.js       # Работа с файлами
+    │   │   ├── chat.js        # Управление чатами
+    │   │   └── formatter.js   # Форматирование кода
+    │   ├── ipc/               # IPC обработчики
+    │   │   ├── auth-handlers.js
+    │   │   ├── flowise-handlers.js
+    │   │   ├── file-handlers.js
+    │   │   ├── chat-handlers.js
+    │   │   └── settings-handlers.js
+    │   └── window.js          # Создание окна
+    ├── renderer/              # Модули UI
+    │   ├── components/        # UI компоненты
+    │   │   ├── auth-modal.js
+    │   │   ├── chat-panel.js
+    │   │   ├── chat-list.js
+    │   │   ├── file-tree.js
+    │   │   ├── code-viewer.js
+    │   │   ├── settings-modal.js
+    │   │   └── resizable-panels.js
+    │   ├── utils/             # Утилиты
+    │   │   ├── dom.js
+    │   │   └── format.js
+    │   └── state/             # Состояние
+    │       └── app-state.js
+    └── shared/                # Общие утилиты
+        └── utils.js
 ```
 
 ---

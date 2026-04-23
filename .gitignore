@@ -39,3 +39,5 @@ desktop.ini
 
 # Supabase CLI temp files
 supabase/.temp/
+
+.kiro
