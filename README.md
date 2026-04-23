@@ -25,8 +25,6 @@
 ## Требования
 
 - [Node.js](https://nodejs.org) 18 или новее
-- Запущенный Flowise-сервер (локально или удалённо)
-- Аккаунт [Supabase](https://supabase.com) (бесплатно)
 
 ---
 
@@ -35,10 +33,6 @@
 ```powershell
 # Установить зависимости
 npm install
-
-# Скопировать файл переменных окружения
-Copy-Item .env.example .env
-# Заполните SUPABASE_URL и SUPABASE_ANON_KEY в .env
 
 # Запустить приложение
 npm start
@@ -59,20 +53,11 @@ npm start
 
 Сессия сохраняется между запусками — входить каждый раз не нужно.
 
-### 2. Настройка Flowise
+### 2. Начало работы
 
-1. Нажмите кнопку **⚙️** в правом верхнем углу
-2. Заполните поля настроек:
-
-| Поле | Пример |
-|---|---|
-| Flowise URL | `http://localhost:3000` |
-| Flow ID | `28b78ce4-8b9f-425d-ad57-409e5bb15288` |
-| Bearer Token | `HG7z-...` (если требуется) |
-| Папка проекта | `C:\Users\...\my-project` |
-
-3. Нажмите **Сохранить**
-4. Введите запрос и нажмите **Отправить** или `Ctrl+Enter`
+1. Введите запрос в чат и нажмите **Отправить** или `Ctrl+Enter`
+2. AI сгенерирует файлы и сохранит их в папку проекта
+3. Используйте **⚙️** для изменения папки проекта
 
 Настройки сохраняются в `%APPDATA%\orcheus-ai\orcheus-ai-settings.json`.
 
@@ -138,15 +123,6 @@ orcheus-ai/
 
 ---
 
-## Переменные окружения (.env)
-
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=sb_publishable_...
-```
-
-Файл `.env` содержит реальные значения и исключён из git. Шаблон — в `.env.example`.
-
 ---
 
 ## CLI-режим (без GUI)
@@ -179,7 +155,7 @@ npm run build
 
 - Авторизация через Supabase — пароли не хранятся локально
 - Сессия сохраняется в `%APPDATA%\orcheus-ai\orcheus-ai-session.json`
-- Ключи Supabase хранятся в `.env` — не попадают в git
+- Supabase anon key зашит в приложение (это публичный ключ, безопасен для клиента)
 - Токен Flowise хранится локально в `%APPDATA%\orcheus-ai` — не передаётся никуда кроме вашего Flowise
 - Записываемые файлы проверяются на path traversal (`../` атаки)
 - Renderer-процесс не имеет прямого доступа к Node.js (contextBridge)

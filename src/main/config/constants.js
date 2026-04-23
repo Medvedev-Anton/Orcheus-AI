@@ -11,15 +11,16 @@ const SESSION_FILE = path.join(app.getPath('userData'), 'orcheus-ai-session.json
 
 // Настройки по умолчанию
 const DEFAULT_SETTINGS = {
-  flowiseUrl: process.env.FLOWISE_URL || 'http://localhost:3000',
-  flowId: process.env.FLOW_ID || '',
-  token: process.env.FLOWISE_TOKEN || '',
-  projectRoot: process.env.PROJECT_ROOT || path.join(app.getPath('documents'), 'flowise-projects'),
+  // Flowise сервер (замените на свой при деплое)
+  flowiseUrl: 'https://your-flowise-server.com', // TODO: заменить на реальный URL
+  flowId: '', // TODO: заменить на ID вашего flow
+  token: '', // TODO: заменить если нужна авторизация на Flowise
+  projectRoot: path.join(app.getPath('documents'), 'orcheus-projects'),
 };
 
-// Supabase
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY;
+// Supabase (зашитые ключи — anon key публичный, безопасен для клиента)
+const SUPABASE_URL = 'https://bghbeegzxbodmdhbugxm.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_cmxhvdZ4RSIAmTSfQ9zFMQ_0ut6D8Fu';
 
 // Prettier парсеры
 const PRETTIER_PARSERS = {
