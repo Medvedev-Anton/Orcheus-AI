@@ -6,7 +6,7 @@
  * Генерация уникального ID
  * @returns {string} Уникальный ID
  */
-function genId() {
+export function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
@@ -15,7 +15,7 @@ function genId() {
  * @param {string} str - Исходная строка
  * @returns {string} Экранированная строка
  */
-function escapeHtml(str) {
+export function escapeHtml(str) {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -28,7 +28,7 @@ function escapeHtml(str) {
  * @param {string} name - Имя файла
  * @returns {string} Emoji иконка
  */
-function fileIcon(name) {
+export function fileIcon(name) {
   const ext = name.split('.').pop().toLowerCase();
   const map = {
     js: '📜', mjs: '📜', cjs: '📜',
@@ -45,5 +45,3 @@ function fileIcon(name) {
   };
   return map[ext] || '📄';
 }
-
-module.exports = { genId, escapeHtml, fileIcon };
