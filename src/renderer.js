@@ -69,12 +69,12 @@ async function init() {
 
 function _setupEventListeners() {
   // Авторизация
-  document.addEventListener('auth-success', (e) => {
+  window.addEventListener('auth-success', (e) => {
     chatPanel.addMessage('sys', `✅ Добро пожаловать, ${e.detail.email}!`);
     chatList.load();
   });
   
-  document.addEventListener('show-auth', () => {
+  window.addEventListener('show-auth', () => {
     authModal.show();
   });
   
@@ -89,13 +89,13 @@ function _setupEventListeners() {
   });
   
   // Настройки
-  document.addEventListener('settings-saved', async () => {
+  window.addEventListener('settings-saved', async () => {
     chatPanel.addMessage('sys', '✅ Настройки сохранены.');
     await fileTree.refresh();
   });
   
   // Файлы
-  document.addEventListener('files-generated', async (e) => {
+  window.addEventListener('files-generated', async (e) => {
     await fileTree.refresh();
     if (e.detail.length > 0) {
       const first = e.detail[0];
@@ -103,29 +103,33 @@ function _setupEventListeners() {
     }
   });
   
-  document.addEventListener('open-file', (e) => {
+  window.addEventListener('open-file', (e) => {
+    console.log('[Renderer] open-file event:', e.detail);
     codeViewer.openFile(e.detail.fullPath, e.detail.name);
   });
   
   // Чаты
-  document.addEventListener('chat-updated', () => {
+  window.addEventListener('chat-updated', () => {
     chatList.load();
   });
   
-  document.addEventListener('new-chat', () => {
+  window.addEventListener('new-chat', () => {
     chatList.updateActive();
   });
   
-  document.addEventListener('chat-deleted', () => {
+  window.addEventListener('chat-deleted', () => {
     chatPanel.clear();
     chatPanel.addMessage('sys', 'Чат удалён. Начните новый или выберите другой из списка.');
   });
   
-  document.addEventListener('switch-chat', async (e) => {
+  window.addEventListener('switch-chat', async (e) => {
+    console.log('[Renderer] switch-chat event:', e.detail);
     chatPanel.clear();
     chatList.updateActive();
     
     const result = await window.api.loadChatMessages(e.detail.chatId);
+    console.log('[Renderer] loadChatMessages result:', result);
+    
     if (result.ok) {
       if (result.messages.length > 0) {
         for (const msg of result.messages) {

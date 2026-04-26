@@ -70,6 +70,7 @@ export class CodeViewer {
   }
 
   async openFile(fullPath, name) {
+    console.log('[CodeViewer] openFile:', fullPath, name);
     if (this.state.isEditMode()) this.setEditMode(false);
     this.state.setCurrentFilePath(fullPath);
 
@@ -79,6 +80,7 @@ export class CodeViewer {
     this.elCodeEditor.value = '';
 
     const result = await window.api.readFile(fullPath);
+    console.log('[CodeViewer] readFile result:', result);
 
     if (!result.ok) {
       this.elCodePre.textContent = `Ошибка чтения файла:\n${result.error}`;

@@ -24,7 +24,9 @@ export class FileTree {
   }
 
   async refresh() {
+    console.log('[FileTree] refresh...');
     const result = await window.api.listFiles();
+    console.log('[FileTree] listFiles result:', result);
 
     this.elFileTree.innerHTML = '';
     this.elStRoot.textContent = '';
@@ -36,14 +38,15 @@ export class FileTree {
       return;
     }
 
-    let fileCount = 0;
-    this._renderNodes(result.tree, this.elFileTree, 0, fileCount);
+    const fileCount = this._renderNodes(result.tree, this.elFileTree, 0);
 
     this.elStRoot.textContent = shortenPath(result.root, 40);
     this.elStCount.textContent = `${fileCount} файл(ов)`;
   }
 
-  _renderNodes(nodes, container, depth, fileCount) {
+  _renderNodes(nodes, container, depth) {
+    let count = 0;
+    
     for (const node of nodes) {
       const item = document.createElement('div');
       item.className = `t-node ${node.type === 'dir' ? 't-dir' : 't-file'}`;
@@ -76,14 +79,15 @@ export class FileTree {
         });
 
         if (node.children && node.children.length > 0) {
-          this._renderNodes(node.children, childWrap, depth + 1, fileCount);
+          count += this._renderNodes(node.children, childWrap, depth + 1);
         }
       } else {
-        fileCount.value++;
+        count++;
         icon.textContent = fileIcon(node.name);
         item.title = node.fullPath;
 
         item.addEventListener('click', async () => {
+          console.log('[FileTree] file click:', node.fullPath, node.name);
           document.querySelectorAll('.t-node.active').forEach((e) => e.classList.remove('active'));
           item.classList.add('active');
           
@@ -99,5 +103,7 @@ export class FileTree {
         container.appendChild(item);
       }
     }
+    
+    return count;
   }
 }

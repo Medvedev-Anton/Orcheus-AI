@@ -11,10 +11,10 @@ const SESSION_FILE = path.join(app.getPath('userData'), 'orcheus-ai-session.json
 
 // Настройки по умолчанию
 const DEFAULT_SETTINGS = {
-  // Flowise сервер (замените на свой при деплое)
-  flowiseUrl: 'https://your-flowise-server.com', // TODO: заменить на реальный URL
-  flowId: '', // TODO: заменить на ID вашего flow
-  token: '', // TODO: заменить если нужна авторизация на Flowise
+  // Flowise сервер (для разработки — localhost)
+  flowiseUrl: 'http://localhost:3000',
+  flowId: '',
+  token: '',
   projectRoot: path.join(app.getPath('documents'), 'orcheus-projects'),
 };
 

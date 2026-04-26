@@ -153,6 +153,18 @@
     </div>
     <div class="modal-body">
       <div class="fg">
+        <label for="s-url">Flowise URL</label>
+        <input id="s-url" type="url" placeholder="http://localhost:3000" autocomplete="off" />
+      </div>
+      <div class="fg">
+        <label for="s-flow-id">Flow ID</label>
+        <input id="s-flow-id" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" />
+      </div>
+      <div class="fg">
+        <label for="s-token">Bearer Token <span class="hint">(опционально)</span></label>
+        <input id="s-token" type="password" placeholder="Оставьте пустым если не требуется" autocomplete="off" />
+      </div>
+      <div class="fg">
         <label for="s-root">Папка проекта</label>
         <div class="fg-row">
           <input id="s-root" type="text" placeholder="C:\Users\...\project" autocomplete="off" />

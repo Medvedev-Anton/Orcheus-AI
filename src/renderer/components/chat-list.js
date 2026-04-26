@@ -98,6 +98,7 @@ export class ChatList {
   }
 
   async switchToChat(chatId, title) {
+    console.log('[ChatList] switchToChat:', chatId, title);
     this.state.setCurrentChatId(chatId);
     
     document.querySelectorAll('.chat-item').forEach((el) =>
