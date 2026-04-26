@@ -15,18 +15,29 @@ let _sessionStore = {};
 try {
   if (fs.existsSync(SESSION_FILE)) {
     _sessionStore = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+    console.log('[Auth] Session file loaded, keys:', Object.keys(_sessionStore));
+  } else {
+    console.log('[Auth] No session file found at:', SESSION_FILE);
   }
-} catch { /* ignore */ }
+} catch (err) {
+  console.error('[Auth] Error loading session:', err.message);
+}
 
 const _fileStorage = {
-  getItem: (key) => _sessionStore[key] ?? null,
+  getItem: (key) => {
+    const value = _sessionStore[key] ?? null;
+    console.log('[Auth] Storage.getItem:', key, value ? 'found' : 'not found');
+    return value;
+  },
   setItem: (key, value) => {
+    console.log('[Auth] Storage.setItem:', key);
     _sessionStore[key] = value;
-    try { fs.writeFileSync(SESSION_FILE, JSON.stringify(_sessionStore), 'utf8'); } catch { /* ignore */ }
+    try { fs.writeFileSync(SESSION_FILE, JSON.stringify(_sessionStore), 'utf8'); } catch (err) { console.error('[Auth] Storage.setItem error:', err.message); }
   },
   removeItem: (key) => {
+    console.log('[Auth] Storage.removeItem:', key);
     delete _sessionStore[key];
-    try { fs.writeFileSync(SESSION_FILE, JSON.stringify(_sessionStore), 'utf8'); } catch { /* ignore */ }
+    try { fs.writeFileSync(SESSION_FILE, JSON.stringify(_sessionStore), 'utf8'); } catch (err) { console.error('[Auth] Storage.removeItem error:', err.message); }
   },
 };
 
@@ -53,10 +64,15 @@ function getSupabaseClient() {
  */
 async function getUser() {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    console.log('[Auth] getUser: checking session...');
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('[Auth] getUser error:', error.message);
+    }
+    console.log('[Auth] getUser result:', user ? user.email : 'null');
     return { user: user ?? null };
   } catch (err) {
-    console.error('[Auth] getUser error:', err.message);
+    console.error('[Auth] getUser exception:', err.message);
     return { user: null };
   }
 }
