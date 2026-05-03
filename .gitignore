@@ -19,6 +19,7 @@ orcheus-ai-settings.json
 
 # Переменные окружения (содержат секреты)
 .env
+backend/.env
 
 # Logs
 *.log

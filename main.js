@@ -5,8 +5,6 @@
  * Точка входа приложения
  */
 
-require('dotenv').config();
-
 const { app, BrowserWindow } = require('electron');
 const { createWindow, getMainWindow } = require('./src/main/window');
 const { registerSettingsHandlers } = require('./src/main/ipc/settings-handlers');

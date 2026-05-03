@@ -11,12 +11,11 @@ const SESSION_FILE = path.join(app.getPath('userData'), 'orcheus-ai-session.json
 
 // Настройки по умолчанию
 const DEFAULT_SETTINGS = {
-  // Flowise сервер (для разработки — localhost)
-  flowiseUrl: 'http://localhost:3000',
-  flowId: '',
-  token: '',
   projectRoot: path.join(app.getPath('documents'), 'orcheus-projects'),
 };
+
+// Backend URL (прокси-сервер)
+const BACKEND_URL = 'http://localhost:3001';
 
 // Supabase (зашитые ключи — anon key публичный, безопасен для клиента)
 const SUPABASE_URL = 'https://bghbeegzxbodmdhbugxm.supabase.co';
@@ -43,6 +42,7 @@ module.exports = {
   SETTINGS_FILE,
   SESSION_FILE,
   DEFAULT_SETTINGS,
+  BACKEND_URL,
   SUPABASE_URL,
   SUPABASE_ANON,
   PRETTIER_PARSERS,

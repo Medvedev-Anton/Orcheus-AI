@@ -1,10 +1,11 @@
 /**
- * Клиент для Flowise API
+ * Клиент для Backend API (прокси-сервер)
  */
 
 const http = require('http');
 const https = require('https');
-const { FLOWISE_TIMEOUT } = require('../config/constants');
+const { FLOWISE_TIMEOUT, BACKEND_URL } = require('../config/constants');
+const { getSupabaseClient } = require('./auth');
 
 /**
  * Попытка парсинга JSON
@@ -59,40 +60,46 @@ function extractFiles(payload) {
 }
 
 /**
- * Вызов Flowise API
+ * Вызов Backend API
  * @param {string} question - Вопрос пользователя
  * @param {string} chatId - ID чата
  * @param {object} settings - Настройки
  * @param {function} progressCb - Callback для прогресса
- * @returns {Promise<object>} Ответ от Flowise
+ * @returns {Promise<object>} Ответ от Backend
  */
-function callFlowise(question, chatId, settings, progressCb) {
+async function callFlowise(question, chatId, settings, progressCb) {
+  // Получаем JWT токен из Supabase сессии
+  const supabase = getSupabaseClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session?.access_token) {
+    throw new Error('Необходима авторизация. Войдите в аккаунт.');
+  }
+  
   return new Promise((resolve, reject) => {
-    const baseUrl = (settings.flowiseUrl || 'http://localhost:3000')
+    const baseUrl = BACKEND_URL
       .replace(/\/+$/, '')
       .replace('localhost', '127.0.0.1');
-    const { flowId, token } = settings;
 
-    if (!flowId) return reject(new Error('FLOW_ID не настроен. Откройте настройки.'));
     if (!question?.trim()) return reject(new Error('Пустой вопрос'));
 
     let parsed;
-    try { parsed = new URL(`${baseUrl}/api/v1/prediction/${flowId}`); }
-    catch (e) { return reject(new Error('Некорректный Flowise URL: ' + e.message)); }
+    try { parsed = new URL(`${baseUrl}/api/predict`); }
+    catch (e) { return reject(new Error('Некорректный Backend URL: ' + e.message)); }
 
-    const body = JSON.stringify({ question, streaming: false });
+    const body = JSON.stringify({ question, chatId });
     const isHttps = parsed.protocol === 'https:';
     const mod = isHttps ? https : http;
 
     const headers = {
       'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(body),
+      'Authorization': `Bearer ${session.access_token}`,
     };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    console.log(`[Flowise] → POST ${baseUrl}/api/v1/prediction/${flowId}`);
-    console.log(`[Flowise] Вопрос: ${question.slice(0, 120)}${question.length > 120 ? '...' : ''}`);
-    progressCb?.('Подключаемся к Flowise...');
+    console.log(`[Backend] → POST ${baseUrl}/api/predict`);
+    console.log(`[Backend] Вопрос: ${question.slice(0, 120)}${question.length > 120 ? '...' : ''}`);
+    progressCb?.('Подключаемся к серверу...');
 
     const req = mod.request(
       {
@@ -108,14 +115,14 @@ function callFlowise(question, chatId, settings, progressCb) {
         res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => {
           const text = Buffer.concat(chunks).toString('utf8');
-          console.log(`[Flowise] HTTP ${res.statusCode} | ${text.length} байт`);
+          console.log(`[Backend] HTTP ${res.statusCode} | ${text.length} байт`);
           if (res.statusCode !== 200) {
             let errMsg = text.slice(0, 500);
             try {
               const errJson = JSON.parse(text);
               if (errJson.message) errMsg = errJson.message;
             } catch { /* raw text */ }
-            console.error(`[Flowise] Ошибка ${res.statusCode}:`, errMsg);
+            console.error(`[Backend] Ошибка ${res.statusCode}:`, errMsg);
             return reject(new Error(errMsg));
           }
           progressCb?.('Обрабатываем ответ...');
@@ -128,7 +135,7 @@ function callFlowise(question, chatId, settings, progressCb) {
     );
 
     req.on('error', (err) => {
-      console.error('[Flowise] Ошибка соединения:', err.message);
+      console.error('[Backend] Ошибка соединения:', err.message);
       reject(err);
     });
     

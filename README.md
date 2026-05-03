@@ -16,9 +16,10 @@
 - **Генерация файлов** — ответ AI автоматически разбирается на файлы и записывается в папку проекта
 - **Дерево файлов** — левая панель с иерархией, сворачиваемыми папками, иконками по типу файла
 - **Просмотр кода** — правая панель с нумерацией строк и кнопкой «Копировать»
-- **Настройки через GUI** — URL, Flow ID, токен, папка проекта (без ввода в терминал)
+- **Настройки через GUI** — папка проекта, тема оформления
 - **Новый чат** — сброс контекста диалога
 - **Открыть в проводнике** — быстрый доступ к папке проекта
+- **Безопасность** — токен Flowise скрыт на сервере, недоступен клиенту
 
 ---
 
@@ -30,11 +31,40 @@
 
 ## Установка и запуск
 
-```powershell
-# Установить зависимости
-npm install
+### 1. Установка зависимостей
 
-# Запустить приложение
+```powershell
+npm install
+```
+
+### 2. Настройка backend сервера
+
+Создайте файл `backend/.env`:
+
+```bash
+# Flowise
+FLOWISE_URL=https://your-flowise-server.com
+FLOWISE_TOKEN=your-secret-token
+FLOW_ID=your-flow-id
+
+# Supabase (для проверки JWT)
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+
+# Server
+PORT=3001
+```
+
+### 3. Запуск
+
+**Терминал 1 — Backend сервер:**
+```powershell
+cd backend
+node index.js
+```
+
+**Терминал 2 — Electron приложение:**
+```powershell
 npm start
 ```
 
@@ -76,35 +106,49 @@ npm start
 
 ```
 orcheus-ai/
-├── main.js                    # Точка входа главного процесса
-├── preload.js                 # contextBridge — безопасный мост main ↔ renderer
-├── flowise-save.mjs           # CLI-скрипт (работает независимо)
-├── .env                       # Секреты (не пушить в git!)
-├── .env.example               # Шаблон переменных окружения
+├── backend/                  # 🆕 Прокси-сервер (скрывает токен Flowise)
+│   ├── index.js              # Express сервер на порту 3001
+│   ├── config.js             # Загрузка переменных окружения
+│   ├── .env                  # Секреты: FLOWISE_TOKEN, FLOW_ID
+│   ├── routes/
+│   │   └── predict.js        # POST /api/predict — прокси к Flowise
+│   └── middleware/
+│       ├── auth.js           # Проверка Supabase JWT
+│       ├── rateLimit.js      # Ограничение 60 req/min
+│       └── errorHandler.js   # Обработка ошибок
+│
+├── main.js                   # Точка входа главного процесса
+├── preload.js                # contextBridge — безопасный мост main ↔ renderer
+├── flowise-save.mjs          # CLI-скрипт (работает независимо)
+├── .env                      # Supabase ключи (публичные)
+├── .env.example              # Шаблон переменных окружения
 ├── package.json
+│
 └── src/
-    ├── index.html             # Разметка интерфейса
-    ├── styles.css             # Тёмная тема
-    ├── renderer.js            # Точка входа UI
-    ├── main/                  # Модули главного процесса
-    │   ├── config/            # Константы и настройки
-    │   │   ├── constants.js   # Константы приложения
-    │   │   └── settings.js    # Управление настройками
-    │   ├── services/          # Бизнес-логика
-    │   │   ├── auth.js        # Авторизация Supabase
-    │   │   ├── flowise.js     # Flowise API клиент
-    │   │   ├── files.js       # Работа с файлами
-    │   │   ├── chat.js        # Управление чатами
-    │   │   └── formatter.js   # Форматирование кода
-    │   ├── ipc/               # IPC обработчики
+    ├── index.html            # Разметка интерфейса
+    ├── styles.css            # Тёмная тема
+    ├── renderer.js           # Точка входа UI
+    │
+    ├── main/                 # Модули главного процесса (Node.js)
+    │   ├── config/
+    │   │   ├── constants.js  # Константы: SUPABASE_URL, BACKEND_URL
+    │   │   └── settings.js   # Управление настройками
+    │   ├── services/
+    │   │   ├── auth.js       # Авторизация Supabase
+    │   │   ├── flowise.js    # Запросы к backend (прокси)
+    │   │   ├── files.js      # Работа с файлами
+    │   │   ├── chat.js       # Управление чатами
+    │   │   └── formatter.js  # Форматирование кода
+    │   ├── ipc/
     │   │   ├── auth-handlers.js
     │   │   ├── flowise-handlers.js
     │   │   ├── file-handlers.js
     │   │   ├── chat-handlers.js
     │   │   └── settings-handlers.js
-    │   └── window.js          # Создание окна
-    ├── renderer/              # Модули UI
-    │   ├── components/        # UI компоненты
+    │   └── window.js         # Создание окна
+    │
+    ├── renderer/             # Модули UI (браузер)
+    │   ├── components/
     │   │   ├── auth-modal.js
     │   │   ├── chat-panel.js
     │   │   ├── chat-list.js
@@ -112,12 +156,13 @@ orcheus-ai/
     │   │   ├── code-viewer.js
     │   │   ├── settings-modal.js
     │   │   └── resizable-panels.js
-    │   ├── utils/             # Утилиты
+    │   ├── utils/
     │   │   ├── dom.js
     │   │   └── format.js
-    │   └── state/             # Состояние
+    │   └── state/
     │       └── app-state.js
-    └── shared/                # Общие утилиты
+    │
+    └── shared/
         └── utils.js
 ```
 
@@ -141,6 +186,26 @@ node flowise-save.mjs from-json ./result.json
 
 ---
 
+## API Endpoints (Backend)
+
+| Endpoint | Method | Описание |
+|----------|--------|----------|
+| `/health` | GET | Проверка состояния сервера |
+| `/api/predict` | POST | Проксирование запроса к Flowise |
+
+**POST /api/predict:**
+```json
+{
+  "question": "создай React приложение",
+  "chatId": "optional-chat-id"
+}
+```
+
+Headers:
+- `Authorization: Bearer <Supabase_JWT>`
+
+---
+
 ## Сборка .exe
 
 ```powershell
@@ -153,9 +218,20 @@ npm run build
 
 ## Безопасность
 
-- Авторизация через Supabase — пароли не хранятся локально
-- Сессия сохраняется в `%APPDATA%\orcheus-ai\orcheus-ai-session.json`
-- Supabase anon key зашит в приложение (это публичный ключ, безопасен для клиента)
-- Токен Flowise хранится локально в `%APPDATA%\orcheus-ai` — не передаётся никуда кроме вашего Flowise
-- Записываемые файлы проверяются на path traversal (`../` атаки)
-- Renderer-процесс не имеет прямого доступа к Node.js (contextBridge)
+### Архитектура
+
+```
+Electron Client → Backend Proxy → Flowise API
+                      │
+                      └── Токен Flowise хранится здесь (секрет!)
+```
+
+### Защита
+
+- **Токен Flowise скрыт** — хранится только на сервере в `backend/.env`, никогда не попадает к клиенту
+- **Авторизация через Supabase** — пароли не хранятся локально
+- **JWT verification** — сервер проверяет токен пользователя перед проксированием запроса
+- **Rate limiting** — 60 запросов в минуту на пользователя
+- **Supabase anon key** — публичный ключ, безопасен для клиента
+- **Path traversal защита** — записываемые файлы проверяются на `../` атаки
+- **contextBridge** — renderer-процесс не имеет прямого доступа к Node.js
