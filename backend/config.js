@@ -33,4 +33,16 @@ function validateConfig() {
 
 const isConfigured = validateConfig();
 
-module.exports = { config, isConfigured };
+// AITunnel LLM Proxy configuration (Requirement 5.3)
+const llmConfig = {
+  apiKey: process.env.AITUNNEL_API_KEY || null,
+  baseUrl: (process.env.AITUNNEL_BASE_URL || 'https://api.aitunnel.ru/v1').replace(/\/+$/, ''),
+  timeoutMs: parseInt(process.env.AITUNNEL_TIMEOUT_MS, 10) || 120000,
+  allowedModels: (process.env.AITUNNEL_ALLOWED_MODELS || 'deepseek-v4-flash')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean),
+  debug: process.env.LLM_PROXY_DEBUG === 'true'
+};
+
+module.exports = { config, isConfigured, llmConfig };

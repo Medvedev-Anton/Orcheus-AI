@@ -7,7 +7,7 @@ const http = require('http');
 const https = require('https');
 const { config, isConfigured } = require('../config');
 
-const FLOWISE_TIMEOUT = 280000; // 280 секунд
+const FLOWISE_TIMEOUT = 0; // Без таймаута — AgentFlow может работать долго
 
 /**
  * POST /api/predict
@@ -89,13 +89,17 @@ async function predictHandler(req, res, next) {
 
     flowiseReq.on('error', (err) => {
       console.error('[Predict] Ошибка соединения:', err.message);
-      res.status(502).json({ error: 'Ошибка соединения с Flowise' });
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Ошибка соединения с Flowise' });
+      }
     });
 
     flowiseReq.on('timeout', () => {
       flowiseReq.destroy();
       console.error('[Predict] Таймаут запроса к Flowise');
-      res.status(502).json({ error: 'Ошибка соединения с Flowise' });
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Таймаут: AgentFlow выполняется слишком долго' });
+      }
     });
 
     flowiseReq.write(body);

@@ -36,7 +36,7 @@ const PRETTIER_PARSERS = {
 const SKIP_FOLDERS = new Set(['node_modules', '.git', '.next', 'dist', '__pycache__', '.idea', '.vscode', 'build', 'out']);
 
 // Таймауты
-const FLOWISE_TIMEOUT = 900000; // 15 минут
+const FLOWISE_TIMEOUT = 0; // Без таймаута — AgentFlow может работать долго
 
 module.exports = {
   SETTINGS_FILE,

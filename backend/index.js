@@ -8,7 +8,9 @@ const cors = require('cors');
 const authMiddleware = require('./middleware/auth');
 const rateLimitMiddleware = require('./middleware/rateLimit');
 const errorHandler = require('./middleware/errorHandler');
+const ipAllowlistMiddleware = require('./middleware/ipAllowlist');
 const { predictHandler } = require('./routes/predict');
+const llmProxyRouter = require('./routes/llmProxy');
 const { config, isConfigured } = require('./config');
 
 // Создаём Express app
@@ -23,6 +25,10 @@ app.use(cors({
 
 // JSON body parser
 app.use(express.json());
+
+// LLM Proxy — OpenAI-compatible endpoints (Requirements 5.2, 5.7, 6.1)
+// ipAllowlistMiddleware стоит первым: защищает /v1/* до любой бизнес-логики
+app.use('/v1', ipAllowlistMiddleware, llmProxyRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
