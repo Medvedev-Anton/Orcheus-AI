@@ -10,7 +10,9 @@ const rateLimitMiddleware = require('./middleware/rateLimit');
 const errorHandler = require('./middleware/errorHandler');
 const ipAllowlistMiddleware = require('./middleware/ipAllowlist');
 const { predictHandler } = require('./routes/predict');
+const { generateStreamHandler } = require('./routes/generate');
 const llmProxyRouter = require('./routes/llmProxy');
+const { getUsage, resetUsage } = llmProxyRouter;
 const { config, isConfigured } = require('./config');
 
 // Создаём Express app
@@ -41,6 +43,19 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.post('/api/predict', authMiddleware, rateLimitMiddleware, predictHandler);
+app.get('/api/generate/stream', authMiddleware, rateLimitMiddleware, generateStreamHandler);
+
+// Token usage endpoint
+app.get('/api/usage', authMiddleware, (req, res) => {
+  const key = req.headers['x-session-id'] || req.user?.id || 'global';
+  res.json(getUsage(key));
+});
+
+app.delete('/api/usage', authMiddleware, (req, res) => {
+  const key = req.headers['x-session-id'] || req.user?.id || 'global';
+  resetUsage(key);
+  res.json({ ok: true });
+});
 
 // Error handler (должен быть последним)
 app.use(errorHandler);

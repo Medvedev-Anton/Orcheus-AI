@@ -84,6 +84,22 @@ async function writeProjectFiles(projectRoot, files, progressCb) {
 }
 
 /**
+ * Запись одного файла в директорию проекта
+ * @param {string} projectRoot - Корневая папка проекта
+ * @param {string} name - Относительный путь файла
+ * @param {string} content - Содержимое файла
+ * @returns {Promise<{ name: string, fullPath: string }>}
+ */
+async function writeSingleFile(projectRoot, name, content) {
+  // Sanitize недопустимых символов в имени
+  const safeName = name.replace(/[<>:"|?*\0]/g, '_');
+  const full = safeResolve(projectRoot, safeName);
+  await fsp.mkdir(path.dirname(full), { recursive: true });
+  await fsp.writeFile(full, content, 'utf8');
+  return { name: safeName, fullPath: full };
+}
+
+/**
  * Рекурсивное построение дерева файлов
  * @param {string} dirPath - Путь к директории
  * @param {string} relBase - Базовый относительный путь
@@ -165,6 +181,7 @@ async function writeFile(filePath, content, projectRoot) {
 module.exports = {
   safeResolve,
   writeProjectFiles,
+  writeSingleFile,
   listDir,
   readFile,
   writeFile,

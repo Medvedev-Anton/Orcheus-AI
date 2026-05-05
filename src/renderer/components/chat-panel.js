@@ -13,6 +13,9 @@ export class ChatPanel {
     this.elMessages = $('messages');
     this.elInput = $('chat-input');
     this.elBtnSend = $('btn-send');
+
+    this._unsubscribeStream = null;
+    this._lastFileMessageEl = null;
     
     this._bindEvents();
   }
@@ -123,32 +126,106 @@ export class ChatPanel {
       window.api.saveMessage(chatId, 'user', question, []).catch(console.error);
     }
 
-    const result = await window.api.predict(question, this.state.getChatId());
+    // Подписываемся на SSE-события
+    this._unsubscribeStream = window.api.onStreamEvent(this._handleStreamEvent.bind(this));
 
-    this.removeThinking();
+    // Запускаем потоковую генерацию
+    await window.api.generate(question, this.state.getChatId());
+  }
+
+  _unlockInput() {
     this.state.setGenerating(false);
     this.elBtnSend.disabled = false;
     this.elBtnSend.textContent = 'Отправить ▶';
+    if (this._unsubscribeStream) {
+      this._unsubscribeStream();
+      this._unsubscribeStream = null;
+    }
+  }
 
-    if (result.ok) {
-      const n = result.files.length;
-      const aiText = `✅ Готово! Записано файлов: ${n}`;
-      this.addMessage('ai', aiText, result.files);
-      setStatus(`Готово — ${n} файл(ов) сгенерировано`);
-      
-      if (chatId) {
-        window.api.saveMessage(chatId, 'ai', aiText, result.files).catch(console.error);
-        window.dispatchEvent(new CustomEvent('chat-updated'));
+  _handleStreamEvent(event) {
+    const chatId = this.state.getCurrentChatId();
+
+    switch (event.type) {
+      case 'status': {
+        // Обновляем текст индикатора загрузки
+        const thinking = document.getElementById('thinking');
+        if (thinking) {
+          const bubble = thinking.querySelector('.msg-bubble');
+          if (bubble) bubble.textContent = event.message;
+        }
+        setStatus(event.message);
+        break;
       }
-      
-      window.dispatchEvent(new CustomEvent('files-generated', { detail: result.files }));
-    } else {
-      const errText = result.error || 'Неизвестная ошибка';
-      this.addMessage('err', errText);
-      setStatus('Ошибка');
-      
-      if (chatId) {
-        window.api.saveMessage(chatId, 'err', errText, []).catch(console.error);
+
+      case 'plan': {
+        this.removeThinking();
+        const fileList = event.files.map(f => `• ${f.name}`).join('\n');
+        const planText = `📋 План готов. Буду создавать:\n${fileList}`;
+        this.addMessage('ai', planText);
+        if (chatId) {
+          window.api.saveMessage(chatId, 'ai', planText, []).catch(console.error);
+        }
+        break;
+      }
+
+      case 'file_start': {
+        const msg = this.addMessage('ai', `⏳ Генерирую файл \`${event.name}\`...`);
+        this._lastFileMessageEl = msg;
+        break;
+      }
+
+      case 'file_done': {
+        if (this._lastFileMessageEl) {
+          const bubble = this._lastFileMessageEl.querySelector('.msg-bubble');
+          if (bubble) bubble.textContent = `✅ Файл \`${event.name}\` создан`;
+
+          // Добавляем кликабельный chip
+          const chips = document.createElement('div');
+          chips.className = 'chips';
+          const btn = document.createElement('button');
+          btn.className = 'chip';
+          btn.textContent = `${fileIcon(event.name)} ${event.name}`;
+          btn.title = event.fullPath;
+          btn.addEventListener('click', () => {
+            window.dispatchEvent(new CustomEvent('open-file', { detail: event }));
+          });
+          chips.appendChild(btn);
+          this._lastFileMessageEl.appendChild(chips);
+          this._lastFileMessageEl = null;
+        }
+        this.elMessages.scrollTop = this.elMessages.scrollHeight;
+        window.dispatchEvent(new CustomEvent('files-generated', { detail: [event] }));
+        break;
+      }
+
+      case 'done': {
+        const n = event.files.length;
+        const doneText = `🎉 Проект готов. Создано файлов: ${n}`;
+        this.addMessage('ai', doneText);
+        setStatus(`Готово — ${n} файл(ов) сгенерировано`);
+        if (chatId) {
+          window.api.saveMessage(chatId, 'ai', doneText, event.files).catch(console.error);
+          window.dispatchEvent(new CustomEvent('chat-updated'));
+        }
+        // Показываем статистику токенов если есть
+        if (event.tokenUsage && event.tokenUsage.totalTokens > 0) {
+          const u = event.tokenUsage;
+          this.addMessage('sys', `📊 Токены: ${u.totalTokens.toLocaleString()} (запросов к модели: ${u.requests})`);
+        }
+        this._unlockInput();
+        break;
+      }
+
+      case 'error': {
+        const errText = event.message || 'Неизвестная ошибка';
+        this.addMessage('err', errText);
+        setStatus('Ошибка');
+        if (chatId) {
+          window.api.saveMessage(chatId, 'err', errText, []).catch(console.error);
+        }
+        this._unlockInput();
+        break;
       }
     }
   }

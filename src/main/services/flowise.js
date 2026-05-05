@@ -149,4 +149,103 @@ async function callFlowise(question, chatId, settings, progressCb) {
   });
 }
 
-module.exports = { callFlowise, extractFiles };
+/**
+ * Запуск SSE-соединения с /api/generate/stream
+ * @param {string} question - Вопрос пользователя
+ * @param {string} chatId - ID чата
+ * @param {string} projectRoot - Папка проекта
+ * @param {function} onEvent - Callback для событий
+ * @returns {{ cancel: function }}
+ */
+function startGenerate(question, chatId, projectRoot, onEvent) {
+  const supabase = getSupabaseClient();
+  let req = null;
+
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!session?.access_token) {
+      onEvent({ type: 'error', message: 'Необходима авторизация. Войдите в аккаунт.' });
+      return;
+    }
+
+    const baseUrl = BACKEND_URL.replace(/\/+$/, '').replace('localhost', '127.0.0.1');
+    const params = new URLSearchParams({ question, chatId: chatId || '', projectRoot: projectRoot || '' });
+    let parsed;
+    try {
+      parsed = new URL(`${baseUrl}/api/generate/stream?${params}`);
+    } catch (e) {
+      onEvent({ type: 'error', message: 'Некорректный Backend URL: ' + e.message });
+      return;
+    }
+
+    const isHttps = parsed.protocol === 'https:';
+    const mod = isHttps ? https : http;
+
+    req = mod.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+      },
+      (res) => {
+        let buffer = '';
+
+        res.on('data', (chunk) => {
+          buffer += chunk.toString('utf8');
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop(); // Последний неполный фрагмент
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith('data:')) continue;
+            const jsonStr = line.slice('data:'.length).trim();
+            try {
+              const event = JSON.parse(jsonStr);
+              onEvent(event);
+            } catch (e) {
+              console.error('[SSE] Parse error:', e.message, jsonStr.slice(0, 100));
+            }
+          }
+        });
+
+        res.on('end', () => {
+          // Обработка оставшегося буфера
+          if (buffer.trim().startsWith('data:')) {
+            const jsonStr = buffer.trim().slice('data:'.length).trim();
+            try {
+              onEvent(JSON.parse(jsonStr));
+            } catch { /* ignore */ }
+          }
+        });
+
+        res.on('error', (err) => {
+          onEvent({ type: 'error', message: 'Ошибка SSE-соединения: ' + err.message });
+        });
+      }
+    );
+
+    req.on('error', (err) => {
+      onEvent({ type: 'error', message: 'Ошибка соединения с сервером: ' + err.message });
+    });
+
+    req.end();
+  }).catch((err) => {
+    onEvent({ type: 'error', message: 'Ошибка авторизации: ' + err.message });
+  });
+
+  return {
+    cancel: () => {
+      if (req) {
+        req.destroy();
+        req = null;
+      }
+    }
+  };
+}
+
+module.exports = { callFlowise, extractFiles, startGenerate };

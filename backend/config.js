@@ -5,6 +5,10 @@ const config = {
   flowiseUrl: process.env.FLOWISE_URL,
   flowiseToken: process.env.FLOWISE_TOKEN,
   flowId: process.env.FLOW_ID,
+
+  // Flowise Streaming Flows
+  plannerFlowId: process.env.PLANNER_FLOW_ID,
+  generatorFlowId: process.env.GENERATOR_FLOW_ID,
   
   // Supabase
   supabaseUrl: process.env.SUPABASE_URL,
@@ -33,6 +37,12 @@ function validateConfig() {
 
 const isConfigured = validateConfig();
 
+// Streaming generation configuration
+const isStreamingConfigured = !!(config.plannerFlowId && config.generatorFlowId);
+if (!isStreamingConfigured) {
+  console.warn('[Config] Streaming generation not configured: PLANNER_FLOW_ID and/or GENERATOR_FLOW_ID missing.');
+}
+
 // AITunnel LLM Proxy configuration (Requirement 5.3)
 const llmConfig = {
   apiKey: process.env.AITUNNEL_API_KEY || null,
@@ -45,4 +55,4 @@ const llmConfig = {
   debug: process.env.LLM_PROXY_DEBUG === 'true'
 };
 
-module.exports = { config, isConfigured, llmConfig };
+module.exports = { config, isConfigured, isStreamingConfigured, llmConfig };

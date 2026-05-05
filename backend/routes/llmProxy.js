@@ -14,7 +14,49 @@ const { llmConfig } = require('../config');
 
 const router = express.Router();
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Token usage accumulator ───────────────────────────────────────────────────
+
+/**
+ * Накопитель токенов по sessionId.
+ * Ключ: sessionId (или 'global'), значение: { promptTokens, completionTokens, totalTokens, requests }
+ * Очищается через 1 час неактивности.
+ */
+const tokenUsage = new Map();
+
+function getUsageKey(req) {
+  // Пробуем извлечь sessionId из тела запроса
+  return req.body?.user || req.headers['x-session-id'] || 'global';
+}
+
+function accumulateUsage(key, usage) {
+  if (!usage) return;
+  const existing = tokenUsage.get(key) || { promptTokens: 0, completionTokens: 0, totalTokens: 0, requests: 0 };
+  tokenUsage.set(key, {
+    promptTokens: existing.promptTokens + (usage.prompt_tokens || 0),
+    completionTokens: existing.completionTokens + (usage.completion_tokens || 0),
+    totalTokens: existing.totalTokens + (usage.total_tokens || 0),
+    requests: existing.requests + 1,
+    lastUpdated: Date.now()
+  });
+}
+
+function getUsage(key) {
+  return tokenUsage.get(key) || { promptTokens: 0, completionTokens: 0, totalTokens: 0, requests: 0 };
+}
+
+function resetUsage(key) {
+  tokenUsage.delete(key);
+}
+
+// Очистка устаревших записей каждый час
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of tokenUsage.entries()) {
+    if (now - (val.lastUpdated || 0) > 3600000) tokenUsage.delete(key);
+  }
+}, 3600000);
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────
 
 /**
  * Нормализует response_format из формата Flowise в формат, совместимый с OpenAI/AITunnel.
@@ -143,7 +185,21 @@ router.post(['/chat/completions', '/completions'], (req, res) => {
       // Requirement 4.1: буферизованный ответ
       const chunks = [];
       proxyRes.on('data', chunk => chunks.push(chunk));
-      proxyRes.on('end', () => res.end(Buffer.concat(chunks)));
+      proxyRes.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        // Перехватываем usage из ответа
+        try {
+          const json = JSON.parse(buf.toString('utf8'));
+          if (json.usage) {
+            const usageKey = getUsageKey(req);
+            accumulateUsage(usageKey, json.usage);
+            if (llmConfig.debug) {
+              console.log(`[LLMProxy] usage | key: ${usageKey} | prompt: ${json.usage.prompt_tokens} | completion: ${json.usage.completion_tokens} | total: ${json.usage.total_tokens}`);
+            }
+          }
+        } catch { /* не JSON — игнорируем */ }
+        res.end(buf);
+      });
     }
   });
 
@@ -168,3 +224,5 @@ router.post(['/chat/completions', '/completions'], (req, res) => {
 });
 
 module.exports = router;
+module.exports.getUsage = getUsage;
+module.exports.resetUsage = resetUsage;

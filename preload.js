@@ -17,6 +17,22 @@ contextBridge.exposeInMainWorld('api', {
   predict: (question, chatId) =>
     ipcRenderer.invoke('flowise:predict', { question, chatId }),
 
+  // Streaming generation
+  generate: (question, chatId) =>
+    ipcRenderer.invoke('flowise:generate', { question, chatId }),
+
+  generateCancel: () =>
+    ipcRenderer.invoke('flowise:generate-cancel'),
+
+  onStreamEvent: (cb) => {
+    const handler = (_e, event) => cb(event);
+    ipcRenderer.on('flowise:stream-event', handler);
+    return () => ipcRenderer.removeListener('flowise:stream-event', handler);
+  },
+
+  getTokenUsage: () =>
+    ipcRenderer.invoke('flowise:get-token-usage'),
+
   // Progress events from main → renderer
   onProgress: (cb) => {
     const handler = (_e, msg) => cb(msg);
