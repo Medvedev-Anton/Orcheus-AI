@@ -188,6 +188,8 @@ node flowise-save.mjs from-json ./result.json
 
 ## API Endpoints (Backend)
 
+### Standard Endpoints
+
 | Endpoint | Method | Описание |
 |----------|--------|----------|
 | `/health` | GET | Проверка состояния сервера |
@@ -203,6 +205,198 @@ node flowise-save.mjs from-json ./result.json
 
 Headers:
 - `Authorization: Bearer <Supabase_JWT>`
+
+### MCP Endpoints (Model Context Protocol)
+
+MCP интеграция позволяет Flowise AI-агентам работать с файлами проекта инкрементально. Все MCP endpoints требуют аутентификации и используют единый формат запросов/ответов.
+
+**Общие требования:**
+- Аутентификация: `Authorization: Bearer <Supabase_JWT>`
+- Корень проекта: `X-Project-Root: <encoded_path>` (URL-encoded абсолютный путь)
+- Content-Type: `application/json`
+- Rate limit: 60 запросов/минуту
+- Timeout: 30 секунд на операцию
+
+#### POST /mcp/list_files
+Список файлов и директорий в проекте.
+
+**Запрос:**
+```json
+{
+  "parameters": {
+    "path": ".",
+    "recursive": false
+  }
+}
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "data": {
+    "files": [
+      {
+        "type": "dir",
+        "name": "src",
+        "path": "src",
+        "fullPath": "/absolute/path/to/src"
+      },
+      {
+        "type": "file",
+        "name": "index.html",
+        "path": "index.html",
+        "fullPath": "/absolute/path/to/index.html"
+      }
+    ]
+  }
+}
+```
+
+**Ограничения:**
+- Максимальная глубина рекурсии: 10 уровней
+- Скрытые файлы (начинающиеся с `.`) пропускаются
+- Папки `node_modules`, `.git`, `.next`, `dist` пропускаются
+
+#### POST /mcp/read_file
+Чтение содержимого файла.
+
+**Запрос:**
+```json
+{
+  "parameters": {
+    "path": "src/index.js"
+  }
+}
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "data": {
+    "content": "console.log('Hello World');",
+    "path": "src/index.js"
+  }
+}
+```
+
+**Ограничения:**
+- Максимальный размер файла: 10 МБ
+- Кодировка: UTF-8
+
+#### POST /mcp/write_file
+Создание или перезапись файла.
+
+**Запрос:**
+```json
+{
+  "parameters": {
+    "path": "src/index.js",
+    "content": "console.log('Hello World');"
+  }
+}
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "data": {
+    "path": "src/index.js",
+    "fullPath": "/absolute/path/to/src/index.js"
+  }
+}
+```
+
+**Особенности:**
+- Автоматически создаёт родительские директории
+- Перезаписывает существующий файл
+- Все операции логируются для аудита
+
+#### POST /mcp/search_in_files
+Поиск текста в файлах проекта.
+
+**Запрос:**
+```json
+{
+  "parameters": {
+    "query": "console.log",
+    "filePattern": "*.js"
+  }
+}
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "data": {
+    "matches": [
+      {
+        "file": "src/index.js",
+        "line": "console.log('Hello');",
+        "lineNumber": 5,
+        "match": "console.log"
+      }
+    ],
+    "totalMatches": 1,
+    "limitReached": false
+  }
+}
+```
+
+**Ограничения:**
+- Максимум 100 совпадений
+- Поиск регистронезависимый
+- Поддержка glob-паттернов (например: `*.js`, `**/*.css`)
+
+#### POST /mcp/delete_file
+Удаление файла.
+
+**Запрос:**
+```json
+{
+  "parameters": {
+    "path": "src/temp.js"
+  }
+}
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "data": {
+    "path": "src/temp.js",
+    "deleted": true
+  }
+}
+```
+
+**Ограничения:**
+- Можно удалять только файлы (не директории)
+- Операция необратима
+
+#### Формат ошибок
+
+Все MCP endpoints возвращают единый формат ошибок:
+
+```json
+{
+  "success": false,
+  "error": "Описание ошибки"
+}
+```
+
+**HTTP коды ошибок:**
+- `400` - Неверные параметры или небезопасный путь
+- `404` - Файл не найден
+- `408` - Таймаут операции (>30 секунд)
+- `429` - Превышен rate limit
+- `500` - Внутренняя ошибка сервера
+
+**Подробная документация:** См. [docs/flowise-mcp-workflow.md](docs/flowise-mcp-workflow.md) для руководства по использованию MCP инструментов в Flowise.
 
 ---
 
@@ -223,7 +417,8 @@ npm run build
 ```
 Electron Client → Backend Proxy → Flowise API
                       │
-                      └── Токен Flowise хранится здесь (секрет!)
+                      ├── Токен Flowise хранится здесь (секрет!)
+                      └── MCP Endpoints (файловые операции)
 ```
 
 ### Защита
@@ -233,5 +428,14 @@ Electron Client → Backend Proxy → Flowise API
 - **JWT verification** — сервер проверяет токен пользователя перед проксированием запроса
 - **Rate limiting** — 60 запросов в минуту на пользователя
 - **Supabase anon key** — публичный ключ, безопасен для клиента
-- **Path traversal защита** — записываемые файлы проверяются на `../` атаки
+- **Path traversal защита** — записываемые файлы проверяются на `../` атаки (MCP endpoints)
 - **contextBridge** — renderer-процесс не имеет прямого доступа к Node.js
+- **MCP Security:**
+  - Все MCP операции требуют JWT аутентификации
+  - Защита от path traversal атак (запрещены `..`, абсолютные пути)
+  - Валидация `X-Project-Root` заголовка
+  - Ограничение размера файлов (10 МБ)
+  - Ограничение результатов поиска (100 совпадений)
+  - Таймауты операций (30 секунд)
+  - Аудит логирование всех файловых операций
+  - Запрещено удаление директорий (только файлы)

@@ -1,0 +1,9 @@
+{
+  "name": "delete_project_file",
+  "description": "Deletes a file from the project. Use with caution - this action cannot be undone.\n",
+  "color": "linear-gradient(rgb(159,115,101), rgb(10,233,175))",
+  "iconSrc": "",
+  "schema": "[{\"id\":0,\"property\":\"path\",\"description\":\"\",\"type\":\"string\",\"required\":true}]",
+  "func": "const http = require('http');\n\nconst baseUrl = 'http://localhost:3001/mcp/delete_file';\nconst projectRoot = $vars.projectRoot || '.';\nconst authToken = $vars.authToken || '';\n\nconst filePath = typeof $path !== 'undefined' ? $path : '';\nif (!filePath) return 'Error: path is required';\n\nconst body = JSON.stringify({\n  parameters: { path: filePath }\n});\n\nreturn new Promise((resolve, reject) => {\n  const req = http.request(baseUrl, {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'Content-Length': Buffer.byteLength(body),\n      'Authorization': 'Bearer ' + authToken,\n      'X-Project-Root': encodeURIComponent(projectRoot)\n    }\n  }, (res) => {\n    let data = '';\n    res.on('data', chunk => data += chunk);\n    res.on('end', () => {\n      if (res.statusCode !== 200) {\n        resolve('Error: ' + res.statusCode);\n      } else {\n        resolve('File ' + filePath + ' deleted successfully.');\n      }\n    });\n  });\n  \n  req.on('error', (err) => resolve('Error: ' + err.message));\n  req.write(body);\n  req.end();\n});\n",
+  "workspaceId": "61db2c8f-a817-421f-8228-667d6f1895e2"
+}

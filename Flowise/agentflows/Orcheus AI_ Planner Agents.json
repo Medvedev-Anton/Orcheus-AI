@@ -198,36 +198,36 @@
       "dragging": false
     },
     {
-      "id": "llmAgentflow_0",
+      "id": "agentAgentflow_0",
       "position": {
-        "x": 89.37310798321252,
-        "y": 80.2889197887799
+        "x": 104.18655399160627,
+        "y": 61.78891978877988
       },
       "data": {
-        "id": "llmAgentflow_0",
-        "label": "LLM 0",
-        "version": 1.1,
-        "name": "llmAgentflow",
-        "type": "LLM",
-        "color": "#64B5F6",
+        "id": "agentAgentflow_0",
+        "label": "Agent 0",
+        "version": 3.2,
+        "name": "agentAgentflow",
+        "type": "Agent",
+        "color": "#4DD0E1",
         "baseClasses": [
-          "LLM"
+          "Agent"
         ],
         "category": "Agent Flows",
-        "description": "Large language models to analyze user-provided inputs and generate responses",
+        "description": "Dynamically choose and utilize tools during runtime, enabling multi-step reasoning",
         "inputParams": [
           {
             "label": "Model",
-            "name": "llmModel",
+            "name": "agentModel",
             "type": "asyncOptions",
             "loadMethod": "listModels",
             "loadConfig": true,
-            "id": "llmAgentflow_0-input-llmModel-asyncOptions",
+            "id": "agentAgentflow_0-input-agentModel-asyncOptions",
             "display": true
           },
           {
             "label": "Messages",
-            "name": "llmMessages",
+            "name": "agentMessages",
             "type": "array",
             "optional": true,
             "acceptVariable": true,
@@ -264,22 +264,199 @@
                 "rows": 4
               }
             ],
-            "id": "llmAgentflow_0-input-llmMessages-array",
+            "id": "agentAgentflow_0-input-agentMessages-array",
+            "display": true
+          },
+          {
+            "label": "OpenAI Built-in Tools",
+            "name": "agentToolsBuiltInOpenAI",
+            "type": "multiOptions",
+            "optional": true,
+            "options": [
+              {
+                "label": "Web Search",
+                "name": "web_search_preview",
+                "description": "Search the web for the latest information"
+              },
+              {
+                "label": "Code Interpreter",
+                "name": "code_interpreter",
+                "description": "Write and run Python code in a sandboxed environment"
+              },
+              {
+                "label": "Image Generation",
+                "name": "image_generation",
+                "description": "Generate images based on a text prompt"
+              }
+            ],
+            "show": {
+              "agentModel": "chatOpenAI"
+            },
+            "id": "agentAgentflow_0-input-agentToolsBuiltInOpenAI-multiOptions",
+            "display": true
+          },
+          {
+            "label": "Gemini Built-in Tools",
+            "name": "agentToolsBuiltInGemini",
+            "type": "multiOptions",
+            "optional": true,
+            "options": [
+              {
+                "label": "URL Context",
+                "name": "urlContext",
+                "description": "Extract content from given URLs"
+              },
+              {
+                "label": "Google Search",
+                "name": "googleSearch",
+                "description": "Search real-time web content"
+              },
+              {
+                "label": "Code Execution",
+                "name": "codeExecution",
+                "description": "Write and run Python code in a sandboxed environment"
+              }
+            ],
+            "show": {
+              "agentModel": "chatGoogleGenerativeAI"
+            },
+            "id": "agentAgentflow_0-input-agentToolsBuiltInGemini-multiOptions",
+            "display": false
+          },
+          {
+            "label": "Anthropic Built-in Tools",
+            "name": "agentToolsBuiltInAnthropic",
+            "type": "multiOptions",
+            "optional": true,
+            "options": [
+              {
+                "label": "Web Search",
+                "name": "web_search_20250305",
+                "description": "Search the web for the latest information"
+              },
+              {
+                "label": "Web Fetch",
+                "name": "web_fetch_20250910",
+                "description": "Retrieve full content from specified web pages"
+              }
+            ],
+            "show": {
+              "agentModel": "chatAnthropic"
+            },
+            "id": "agentAgentflow_0-input-agentToolsBuiltInAnthropic-multiOptions",
+            "display": false
+          },
+          {
+            "label": "Tools",
+            "name": "agentTools",
+            "type": "array",
+            "optional": true,
+            "array": [
+              {
+                "label": "Tool",
+                "name": "agentSelectedTool",
+                "type": "asyncOptions",
+                "loadMethod": "listTools",
+                "loadConfig": true
+              },
+              {
+                "label": "Require Human Input",
+                "name": "agentSelectedToolRequiresHumanInput",
+                "type": "boolean",
+                "optional": true
+              }
+            ],
+            "id": "agentAgentflow_0-input-agentTools-array",
+            "display": true
+          },
+          {
+            "label": "Knowledge (Document Stores)",
+            "name": "agentKnowledgeDocumentStores",
+            "type": "array",
+            "description": "Give your agent context about different document sources. Document stores must be upserted in advance.",
+            "array": [
+              {
+                "label": "Document Store",
+                "name": "documentStore",
+                "type": "asyncOptions",
+                "loadMethod": "listStores"
+              },
+              {
+                "label": "Describe Knowledge",
+                "name": "docStoreDescription",
+                "type": "string",
+                "generateDocStoreDescription": true,
+                "placeholder": "Describe what the knowledge base is about, this is useful for the AI to know when and how to search for correct information",
+                "rows": 4
+              },
+              {
+                "label": "Return Source Documents",
+                "name": "returnSourceDocuments",
+                "type": "boolean",
+                "optional": true
+              }
+            ],
+            "optional": true,
+            "id": "agentAgentflow_0-input-agentKnowledgeDocumentStores-array",
+            "display": true
+          },
+          {
+            "label": "Knowledge (Vector Embeddings)",
+            "name": "agentKnowledgeVSEmbeddings",
+            "type": "array",
+            "description": "Give your agent context about different document sources from existing vector stores and embeddings",
+            "array": [
+              {
+                "label": "Vector Store",
+                "name": "vectorStore",
+                "type": "asyncOptions",
+                "loadMethod": "listVectorStores",
+                "loadConfig": true
+              },
+              {
+                "label": "Embedding Model",
+                "name": "embeddingModel",
+                "type": "asyncOptions",
+                "loadMethod": "listEmbeddings",
+                "loadConfig": true
+              },
+              {
+                "label": "Knowledge Name",
+                "name": "knowledgeName",
+                "type": "string",
+                "placeholder": "A short name for the knowledge base, this is useful for the AI to know when and how to search for correct information"
+              },
+              {
+                "label": "Describe Knowledge",
+                "name": "knowledgeDescription",
+                "type": "string",
+                "placeholder": "Describe what the knowledge base is about, this is useful for the AI to know when and how to search for correct information",
+                "rows": 4
+              },
+              {
+                "label": "Return Source Documents",
+                "name": "returnSourceDocuments",
+                "type": "boolean",
+                "optional": true
+              }
+            ],
+            "optional": true,
+            "id": "agentAgentflow_0-input-agentKnowledgeVSEmbeddings-array",
             "display": true
           },
           {
             "label": "Enable Memory",
-            "name": "llmEnableMemory",
+            "name": "agentEnableMemory",
             "type": "boolean",
             "description": "Enable memory for the conversation thread",
             "default": true,
             "optional": true,
-            "id": "llmAgentflow_0-input-llmEnableMemory-boolean",
+            "id": "agentAgentflow_0-input-agentEnableMemory-boolean",
             "display": true
           },
           {
             "label": "Memory Type",
-            "name": "llmMemoryType",
+            "name": "agentMemoryType",
             "type": "options",
             "options": [
               {
@@ -306,52 +483,52 @@
             "optional": true,
             "default": "allMessages",
             "show": {
-              "llmEnableMemory": true
+              "agentEnableMemory": true
             },
-            "id": "llmAgentflow_0-input-llmMemoryType-options",
+            "id": "agentAgentflow_0-input-agentMemoryType-options",
             "display": true
           },
           {
             "label": "Window Size",
-            "name": "llmMemoryWindowSize",
+            "name": "agentMemoryWindowSize",
             "type": "number",
             "default": "20",
             "description": "Uses a fixed window size to surface the last N messages",
             "show": {
-              "llmMemoryType": "windowSize"
+              "agentMemoryType": "windowSize"
             },
-            "id": "llmAgentflow_0-input-llmMemoryWindowSize-number",
+            "id": "agentAgentflow_0-input-agentMemoryWindowSize-number",
             "display": false
           },
           {
             "label": "Max Token Limit",
-            "name": "llmMemoryMaxTokenLimit",
+            "name": "agentMemoryMaxTokenLimit",
             "type": "number",
             "default": "2000",
             "description": "Summarize conversations once token limit is reached. Default to 2000",
             "show": {
-              "llmMemoryType": "conversationSummaryBuffer"
+              "agentMemoryType": "conversationSummaryBuffer"
             },
-            "id": "llmAgentflow_0-input-llmMemoryMaxTokenLimit-number",
+            "id": "agentAgentflow_0-input-agentMemoryMaxTokenLimit-number",
             "display": false
           },
           {
             "label": "Input Message",
-            "name": "llmUserMessage",
+            "name": "agentUserMessage",
             "type": "string",
             "description": "Add an input message as user message at the end of the conversation",
             "rows": 4,
             "optional": true,
             "acceptVariable": true,
             "show": {
-              "llmEnableMemory": true
+              "agentEnableMemory": true
             },
-            "id": "llmAgentflow_0-input-llmUserMessage-string",
+            "id": "agentAgentflow_0-input-agentUserMessage-string",
             "display": true
           },
           {
             "label": "Return Response As",
-            "name": "llmReturnResponseAs",
+            "name": "agentReturnResponseAs",
             "type": "options",
             "options": [
               {
@@ -364,13 +541,13 @@
               }
             ],
             "default": "userMessage",
-            "id": "llmAgentflow_0-input-llmReturnResponseAs-options",
+            "id": "agentAgentflow_0-input-agentReturnResponseAs-options",
             "display": true
           },
           {
             "label": "JSON Structured Output",
-            "name": "llmStructuredOutput",
-            "description": "Instruct the LLM to give output in a JSON structured schema",
+            "name": "agentStructuredOutput",
+            "description": "Instruct the Agent to give output in a JSON structured schema",
             "type": "array",
             "optional": true,
             "acceptVariable": true,
@@ -419,7 +596,7 @@
                 "description": "Enum values. Separated by comma",
                 "optional": true,
                 "show": {
-                  "llmStructuredOutput[$index].type": "enum"
+                  "agentStructuredOutput[$index].type": "enum"
                 }
               },
               {
@@ -431,7 +608,7 @@
                 "optional": true,
                 "hideCodeExecute": true,
                 "show": {
-                  "llmStructuredOutput[$index].type": "jsonArray"
+                  "agentStructuredOutput[$index].type": "jsonArray"
                 }
               },
               {
@@ -441,12 +618,12 @@
                 "placeholder": "Description of the key"
               }
             ],
-            "id": "llmAgentflow_0-input-llmStructuredOutput-array",
+            "id": "agentAgentflow_0-input-agentStructuredOutput-array",
             "display": true
           },
           {
             "label": "Update Flow State",
-            "name": "llmUpdateState",
+            "name": "agentUpdateState",
             "description": "Update runtime state during the execution of the workflow",
             "type": "array",
             "optional": true,
@@ -466,53 +643,84 @@
                 "acceptNodeOutputAsVariable": true
               }
             ],
-            "id": "llmAgentflow_0-input-llmUpdateState-array",
+            "id": "agentAgentflow_0-input-agentUpdateState-array",
             "display": true
           }
         ],
         "inputAnchors": [],
         "inputs": {
-          "llmModel": "chatOpenAICustom",
-          "llmMessages": [
+          "agentModel": "chatOpenAICustom",
+          "agentMessages": [
             {
               "role": "system",
-              "content": "<p>Ты архитектор. Верни JSON с планом файлов.</p>"
+              "content": "<p>Ты опытный архитектор программных проектов с доступом к инструментам для работы с файлами.</p><p>ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:</p><p>1. ВСЕГДА вызывай list_project_files В НАЧАЛЕ работы</p><p>2. Проверяй, какие файлы уже существуют в проекте</p><p>3. Не дублируй существующие файлы</p><p>4. Интегрируй новые файлы в существующую структуру</p><p>РАБОЧИЙ ПРОЦЕСС:</p><p>1. Изучить структуру проекта (list_project_files)</p><p>2. Определить, какие файлы уже существуют</p><p>3. Составить список ТОЛЬКО новых файлов или файлов для изменения</p><p>4. Для каждого файла указать:</p><p>   - name: относительный путь (например: index.html, css/styles.css)</p><p>   - description: конкретное описание содержимого (1-2 предложения)</p><p>ПРАВИЛА ПЛАНИРОВАНИЯ:</p><p>- Для веб-сайта с несколькими страницами — создавай отдельный HTML для каждой страницы</p><p>- Разделяй HTML, CSS и JavaScript по отдельным файлам</p><p>- Если нужны компоненты, утилиты, конфиги — выноси их в отдельные файлы</p><p>- Минимум файлов: столько, сколько реально нужно для задачи</p><p>ЗАПРЕЩЕНО:</p><p>- Планировать файлы без проверки существующей структуры</p><p>- Дублировать существующие файлы</p><p>- Игнорировать существующую архитектуру проекта</p><p></p>"
             }
           ],
-          "llmEnableMemory": true,
-          "llmMemoryType": "allMessages",
-          "llmUserMessage": "",
-          "llmReturnResponseAs": "userMessage",
-          "llmStructuredOutput": [
+          "agentToolsBuiltInOpenAI": "",
+          "agentTools": [
+            {
+              "agentSelectedTool": "customTool",
+              "agentSelectedToolRequiresHumanInput": "",
+              "agentSelectedToolConfig": {
+                "selectedTool": "30d57ec4-7499-40f5-9c3b-d85a9cf52480",
+                "returnDirect": "",
+                "customToolName": "",
+                "customToolDesc": "",
+                "customToolSchema": "",
+                "customToolFunc": "",
+                "agentSelectedTool": "customTool"
+              }
+            },
+            {
+              "agentSelectedTool": "customTool",
+              "agentSelectedToolRequiresHumanInput": "",
+              "agentSelectedToolConfig": {
+                "selectedTool": "2ce707e7-91ec-4e6d-95e5-5cedf087e031",
+                "returnDirect": "",
+                "customToolName": "",
+                "customToolDesc": "",
+                "customToolSchema": "",
+                "customToolFunc": "",
+                "agentSelectedTool": "customTool"
+              }
+            }
+          ],
+          "agentKnowledgeDocumentStores": "",
+          "agentKnowledgeVSEmbeddings": "",
+          "agentEnableMemory": true,
+          "agentMemoryType": "allMessages",
+          "agentUserMessage": "",
+          "agentReturnResponseAs": "userMessage",
+          "agentStructuredOutput": [
             {
               "key": "files",
               "type": "jsonArray",
               "enumValues": "",
-              "jsonSchema": "{\n \"type\": \"array\",\n \"items\": {\n   \"type\": \"object\",\n   \"properties\": {\n     \"name\": { \"type\": \"string\" },\n     \"description\": { \"type\": \"string\" }\n   },\n   \"required\": [\"name\", \"description\"]\n }\n}",
+              "jsonSchema": "{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": { \"type\": \"string\" },\n      \"description\": { \"type\": \"string\" }\n    },\n    \"required\": [\"name\", \"description\"]\n  }\n}",
               "description": ""
             }
           ],
-          "llmUpdateState": "",
-          "llmModelConfig": {
+          "agentUpdateState": "",
+          "agentModelConfig": {
             "cache": "",
             "modelName": "deepseek-v4-flash",
             "temperature": "0.5",
-            "streaming": false,
-            "maxTokens": "5000",
+            "streaming": true,
+            "maxTokens": "4998",
             "topP": "",
             "frequencyPenalty": "",
             "presencePenalty": "",
             "timeout": "",
             "basepath": "http://localhost:3001/v1",
             "baseOptions": "",
-            "llmModel": "chatOpenAICustom"
+            "agentModel": "chatOpenAICustom"
           }
         },
         "outputAnchors": [
           {
-            "id": "llmAgentflow_0-output-llmAgentflow",
-            "label": "LLM",
-            "name": "llmAgentflow"
+            "id": "agentAgentflow_0-output-agentAgentflow",
+            "label": "Agent",
+            "name": "agentAgentflow"
           }
         ],
         "outputs": {},
@@ -520,11 +728,11 @@
       },
       "type": "agentFlow",
       "width": 213,
-      "height": 72,
+      "height": 100,
       "selected": false,
       "positionAbsolute": {
-        "x": 89.37310798321252,
-        "y": 80.2889197887799
+        "x": 104.18655399160627,
+        "y": 61.78891978877988
       },
       "dragging": false
     }
@@ -533,15 +741,15 @@
     {
       "source": "startAgentflow_0",
       "sourceHandle": "startAgentflow_0-output-startAgentflow",
-      "target": "llmAgentflow_0",
-      "targetHandle": "llmAgentflow_0",
+      "target": "agentAgentflow_0",
+      "targetHandle": "agentAgentflow_0",
       "data": {
         "sourceColor": "#7EE787",
-        "targetColor": "#64B5F6",
+        "targetColor": "#4DD0E1",
         "isHumanInput": false
       },
       "type": "agentFlow",
-      "id": "startAgentflow_0-startAgentflow_0-output-startAgentflow-llmAgentflow_0-llmAgentflow_0"
+      "id": "startAgentflow_0-startAgentflow_0-output-startAgentflow-agentAgentflow_0-agentAgentflow_0"
     }
   ]
 }

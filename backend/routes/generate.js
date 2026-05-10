@@ -59,9 +59,10 @@ async function writeSingleFile(projectRoot, name, content) {
  * @param {string} url - URL эндпоинта
  * @param {object} body - Тело запроса
  * @param {string} token - Токен авторизации
+ * @param {object} vars - Динамические переменные (authToken, projectRoot)
  * @returns {Promise<object>} Ответ от Flowise
  */
-function callFlowiseHttp(url, body, token) {
+function callFlowiseHttp(url, body, token, vars = {}) {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -70,7 +71,19 @@ function callFlowiseHttp(url, body, token) {
       return reject(new Error('Invalid Flowise URL'));
     }
 
-    const bodyStr = JSON.stringify(body);
+    // Добавляем overrideConfig.vars в body
+    const flowisePayload = {
+      ...body,
+      streaming: false,
+      overrideConfig: {
+        vars: {
+          authToken: vars.authToken || '',
+          projectRoot: vars.projectRoot || ''
+        }
+      }
+    };
+
+    const bodyStr = JSON.stringify(flowisePayload);
     const isHttps = parsed.protocol === 'https:';
     const mod = isHttps ? https : http;
 
@@ -126,6 +139,43 @@ function tryParseJson(value) {
 }
 
 /**
+ * Извлечение JSON из markdown code blocks
+ * @param {string} text - Строка, которая может содержать markdown code blocks
+ * @returns {string} Извлечённый JSON или исходная строка
+ */
+function extractJsonFromMarkdown(text) {
+  if (typeof text !== 'string') return text;
+  
+  // Regex для поиска markdown code blocks
+  // Паттерн: ``` + optional language (json|javascript|js) + newline + content + newline + ```
+  const codeBlockRegex = /```(?:json|javascript|js)?\s*\n([\s\S]*?)\n```/g;
+  
+  const matches = [];
+  let match;
+  
+  // Собираем все совпадения
+  while ((match = codeBlockRegex.exec(text)) !== null) {
+    matches.push(match[1].trim());
+  }
+  
+  // Если нет markdown блоков, возвращаем исходную строку
+  if (matches.length === 0) {
+    return text;
+  }
+  
+  // Пробуем каждый найденный блок
+  for (const content of matches) {
+    // Проверяем, является ли содержимое валидным JSON
+    if (tryParseJson(content) !== null) {
+      return content; // Возвращаем первый валидный JSON
+    }
+  }
+  
+  // Если ни один блок не содержит валидный JSON, возвращаем исходную строку
+  return text;
+}
+
+/**
  * Нормализует один элемент плана к { name, description }
  * Поддерживает разные варианты ключей от LLM
  */
@@ -156,13 +206,15 @@ function parsePlan(payload) {
   }
   // JSON-строка в поле text
   else if (typeof payload?.text === 'string') {
-    const parsed = tryParseJson(payload.text);
+    const extracted = extractJsonFromMarkdown(payload.text);
+    const parsed = tryParseJson(extracted);
     if (parsed?.files && Array.isArray(parsed.files)) rawFiles = parsed.files;
     else if (Array.isArray(parsed)) rawFiles = parsed;
   }
   // JSON-строка в поле json
   else if (payload?.json) {
-    const parsed = typeof payload.json === 'string' ? tryParseJson(payload.json) : payload.json;
+    const extracted = typeof payload.json === 'string' ? extractJsonFromMarkdown(payload.json) : payload.json;
+    const parsed = typeof extracted === 'string' ? tryParseJson(extracted) : extracted;
     if (parsed?.files && Array.isArray(parsed.files)) rawFiles = parsed.files;
     else if (Array.isArray(parsed)) rawFiles = parsed;
   }
@@ -253,6 +305,15 @@ async function generateStreamHandler(req, res, next) {
       return res.end();
     }
 
+    // Подготовка динамических переменных для Flowise
+    const authToken = req.headers.authorization?.replace('Bearer ', '') || '';
+    const vars = {
+      authToken,
+      projectRoot
+    };
+
+    console.log(`[Generate] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot}`);
+
     // Этап 1: Планирование
     sendEvent(res, { type: 'status', message: 'Планируем проект...' });
 
@@ -261,7 +322,7 @@ async function generateStreamHandler(req, res, next) {
 
     let plan;
     try {
-      const plannerResponse = await callFlowiseHttp(plannerUrl, { question, chatId }, config.flowiseToken);
+      const plannerResponse = await callFlowiseHttp(plannerUrl, { question, chatId }, config.flowiseToken, vars);
       console.log('[Generate] Planner raw response:', JSON.stringify(plannerResponse).slice(0, 500));
       const files = parsePlan(plannerResponse);
       
@@ -294,7 +355,7 @@ async function generateStreamHandler(req, res, next) {
       try {
         // Генерация файла
         const generatorQuestion = `Сгенерируй файл ${fileName}: ${fileSpec.description || ''}. Контекст задачи: ${question}`;
-        const generatorResponse = await callFlowiseHttp(generatorUrl, { question: generatorQuestion }, config.flowiseToken);
+        const generatorResponse = await callFlowiseHttp(generatorUrl, { question: generatorQuestion }, config.flowiseToken, vars);
         const content = extractFileContent(generatorResponse);
 
         // Запись файла

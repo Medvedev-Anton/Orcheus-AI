@@ -38,7 +38,39 @@ async function predictHandler(req, res, next) {
       return res.status(503).json({ error: 'Сервер не настроен' });
     }
 
-    const body = JSON.stringify({ question, streaming: false });
+    // Подготовка динамических переменных для Flowise
+    const authToken = req.headers.authorization?.replace('Bearer ', '') || '';
+    const projectRoot = req.headers['x-project-root'] || req.body.projectRoot || '';
+    
+    // Формирование payload с overrideConfig.vars
+    const flowisePayload = { 
+      question, 
+      streaming: false,
+      overrideConfig: {
+        vars: {
+          authToken,
+          projectRoot
+        }
+      }
+    };
+    
+    // Если пользователь передал свой overrideConfig, объединяем его
+    if (overrideConfig && typeof overrideConfig === 'object') {
+      if (overrideConfig.vars) {
+        flowisePayload.overrideConfig.vars = {
+          ...flowisePayload.overrideConfig.vars,
+          ...overrideConfig.vars
+        };
+      }
+      // Копируем другие поля overrideConfig (если есть)
+      Object.keys(overrideConfig).forEach(key => {
+        if (key !== 'vars') {
+          flowisePayload.overrideConfig[key] = overrideConfig[key];
+        }
+      });
+    }
+
+    const body = JSON.stringify(flowisePayload);
     const isHttps = parsed.protocol === 'https:';
     const mod = isHttps ? https : http;
 
@@ -50,6 +82,7 @@ async function predictHandler(req, res, next) {
 
     console.log(`[Predict] → POST ${flowiseUrl} | user: ${req.user?.id || 'unknown'}`);
     console.log(`[Predict] Config: flowiseUrl=${config.flowiseUrl}, flowId=${config.flowId}, token=${config.flowiseToken ? 'set' : 'missing'}`);
+    console.log(`[Predict] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot || 'not set'}`);
 
     // Запрос к Flowise (Requirement 3.4 - таймаут 280 сек)
     const flowiseReq = mod.request(

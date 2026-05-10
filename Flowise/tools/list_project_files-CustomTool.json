@@ -1,0 +1,9 @@
+{
+  "name": "list_project_files",
+  "description": "Lists files and directories in the project. Use this to discover what files exist before creating or modifying code.",
+  "color": "linear-gradient(rgb(23,96,209), rgb(242,78,93))",
+  "iconSrc": "",
+  "schema": "[]",
+  "func": "const http = require('http');\n\nconst baseUrl = 'http://localhost:3001/mcp/list_files';\nconst projectRoot = $vars.projectRoot || '.';\nconst authToken = $vars.authToken || '';\n\n// Кодируем заголовок для поддержки кириллицы и спецсимволов\nconst encodedProjectRoot = encodeURIComponent(projectRoot);\n\nconst body = JSON.stringify({\n  parameters: {\n    path: '.',\n    recursive: false\n  }\n});\n\nreturn new Promise((resolve) => {\n  const req = http.request(baseUrl, {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'Content-Length': Buffer.byteLength(body),\n      'Authorization': 'Bearer ' + authToken,\n      'X-Project-Root': encodedProjectRoot\n    }\n  }, (res) => {\n    let data = '';\n    res.on('data', chunk => data += chunk);\n    res.on('end', () => {\n      if (res.statusCode !== 200) {\n        resolve('Error: ' + res.statusCode + ' - ' + data.slice(0, 300));\n      } else {\n        try {\n          const json = JSON.parse(data);\n          if (json.success && json.data?.files) {\n            const fileList = json.data.files.map(f => f.path + ' (' + f.type + ')').join('\\n');\n            resolve('Files in project:\\n' + fileList);\n          } else {\n            resolve(data);\n          }\n        } catch (e) {\n          resolve(data);\n        }\n      }\n    });\n  });\n\n  req.on('error', (err) => resolve('Error: ' + err.message));\n  req.write(body);\n  req.end();\n});\n",
+  "workspaceId": "61db2c8f-a817-421f-8228-667d6f1895e2"
+}

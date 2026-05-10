@@ -1,0 +1,9 @@
+{
+  "name": "write_project_file",
+  "description": "Creates or overwrites a file with specified content. Use this to save generated code to the project.",
+  "color": "linear-gradient(rgb(2,112,84), rgb(160,230,186))",
+  "iconSrc": "",
+  "schema": "[{\"id\":0,\"property\":\"path\",\"description\":\"Description: Relative file path from project root. Example: index.html or subfolder/style.css\",\"type\":\"string\",\"required\":true},{\"id\":1,\"property\":\"content\",\"description\":\"Description: Complete file content as a plain string. Must be a string, not an object.\",\"type\":\"string\",\"required\":true}]",
+  "func": "const http = require('http');\n\nconst baseUrl = 'http://localhost:3001/mcp/write_file';\nconst projectRoot = $vars.projectRoot || '.';\nconst authToken = $vars.authToken || '';\n\nconst filePath = typeof $path !== 'undefined' ? String($path) : '';\nconst fileContent = typeof $content !== 'undefined' ? String($content) : '';\n\nif (!filePath) return 'Error: path is required';\n\nconst body = JSON.stringify({\n  parameters: { path: filePath, content: fileContent }\n});\n\nconst bodyBuffer = Buffer.from(body, 'utf8');\n\nreturn new Promise((resolve) => {\n  const req = http.request(baseUrl, {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'Content-Length': bodyBuffer.length,\n      'Authorization': 'Bearer ' + authToken,\n      'X-Project-Root': encodeURIComponent(projectRoot)\n    }\n  }, (res) => {\n    let data = '';\n    res.on('data', chunk => data += chunk);\n    res.on('end', () => {\n      if (res.statusCode !== 200) {\n        resolve('Error: ' + res.statusCode + ' - ' + data.slice(0, 300));\n      } else {\n        resolve('File ' + filePath + ' written successfully.');\n      }\n    });\n  });\n\n  req.on('error', (err) => resolve('Error: ' + err.message));\n  req.write(bodyBuffer);\n  req.end();\n});\n",
+  "workspaceId": "61db2c8f-a817-421f-8228-667d6f1895e2"
+}

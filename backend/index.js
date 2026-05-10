@@ -15,6 +15,9 @@ const llmProxyRouter = require('./routes/llmProxy');
 const { getUsage, resetUsage } = llmProxyRouter;
 const { config, isConfigured } = require('./config');
 
+// Import MCP router (Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 13.1)
+const mcpRouter = require('./routes/mcp');
+
 // Создаём Express app
 const app = express();
 
@@ -22,7 +25,7 @@ const app = express();
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type']
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Project-Root']
 }));
 
 // JSON body parser
@@ -44,6 +47,9 @@ app.get('/health', (req, res) => {
 // Routes
 app.post('/api/predict', authMiddleware, rateLimitMiddleware, predictHandler);
 app.get('/api/generate/stream', authMiddleware, rateLimitMiddleware, generateStreamHandler);
+
+// MCP endpoints (Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7)
+app.use('/mcp', mcpRouter);
 
 // Token usage endpoint
 app.get('/api/usage', authMiddleware, (req, res) => {
