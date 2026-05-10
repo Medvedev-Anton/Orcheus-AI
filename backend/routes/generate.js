@@ -55,14 +55,24 @@ async function writeSingleFile(projectRoot, name, content) {
 }
 
 /**
+ * Форматирование времени для логов
+ * @returns {string} Время в формате HH:MM:SS
+ */
+function getTimestamp() {
+  const now = new Date();
+  return now.toTimeString().split(' ')[0]; // HH:MM:SS
+}
+
+/**
  * HTTP-запрос к Flowise API
  * @param {string} url - URL эндпоинта
  * @param {object} body - Тело запроса
  * @param {string} token - Токен авторизации
  * @param {object} vars - Динамические переменные (authToken, projectRoot)
+ * @param {string} flowName - Название агентфлоу для логов (Planner/Generator)
  * @returns {Promise<object>} Ответ от Flowise
  */
-function callFlowiseHttp(url, body, token, vars = {}) {
+function callFlowiseHttp(url, body, token, vars = {}, flowName = 'Unknown') {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -93,6 +103,9 @@ function callFlowiseHttp(url, body, token, vars = {}) {
       'Authorization': `Bearer ${token}`
     };
 
+    const startTime = Date.now();
+    console.log(`[${getTimestamp()}] [${flowName}] → Запрос к Flowise | Node: Agent 0`);
+
     const req = mod.request(
       {
         hostname: parsed.hostname,
@@ -107,10 +120,14 @@ function callFlowiseHttp(url, body, token, vars = {}) {
         flowiseRes.on('data', (chunk) => chunks.push(chunk));
         flowiseRes.on('end', () => {
           const text = Buffer.concat(chunks).toString('utf8');
+          const duration = ((Date.now() - startTime) / 1000).toFixed(2);
           
           if (flowiseRes.statusCode !== 200) {
+            console.error(`[${getTimestamp()}] [${flowName}] ✗ Ошибка HTTP ${flowiseRes.statusCode} | Время: ${duration}s`);
             return reject(new Error(`Flowise error ${flowiseRes.statusCode}: ${text.slice(0, 200)}`));
           }
+
+          console.log(`[${getTimestamp()}] [${flowName}] ✓ Ответ получен | Время: ${duration}s | Размер: ${text.length} байт`);
 
           try {
             const payload = JSON.parse(text);
@@ -122,7 +139,10 @@ function callFlowiseHttp(url, body, token, vars = {}) {
       }
     );
 
-    req.on('error', (err) => reject(err));
+    req.on('error', (err) => {
+      console.error(`[${getTimestamp()}] [${flowName}] ✗ Ошибка соединения: ${err.message}`);
+      reject(err);
+    });
     req.write(bodyStr);
     req.end();
   });
@@ -176,7 +196,7 @@ function extractJsonFromMarkdown(text) {
 }
 
 /**
- * Нормализует один элемент плана к { name, description }
+ * Нормализует один элемент плана к { name, description, action }
  * Поддерживает разные варианты ключей от LLM
  */
 function normalizeFileEntry(item) {
@@ -189,13 +209,20 @@ function normalizeFileEntry(item) {
   // Ищем поле с описанием
   const description = item.description || item.desc || item.purpose || item.content || '';
   
-  return { name: name.trim(), description: String(description) };
+  // Ищем поле с действием (create или edit)
+  const action = item.action || 'create'; // По умолчанию create для обратной совместимости
+  
+  return { 
+    name: name.trim(), 
+    description: String(description),
+    action: action === 'edit' ? 'edit' : 'create' // Валидация: только create или edit
+  };
 }
 
 /**
  * Парсинг Generation_Plan из ответа Flowise
  * @param {object} payload - Ответ от Planner Flow
- * @returns {Array<{name: string, description: string}>}
+ * @returns {Array<{name: string, description: string, action: string}>}
  */
 function parsePlan(payload) {
   let rawFiles = null;
@@ -225,6 +252,8 @@ function parsePlan(payload) {
   }
 
   if (!rawFiles || rawFiles.length === 0) {
+    // Дополнительная диагностика для отладки
+    console.error('[PLANNER] Не удалось найти массив файлов. Структура ответа:', JSON.stringify(payload, null, 2).slice(0, 500));
     throw new Error('Invalid plan format: missing or invalid "files" array');
   }
 
@@ -280,7 +309,7 @@ async function generateStreamHandler(req, res, next) {
     let aborted = false;
     req.on('close', () => {
       aborted = true;
-      console.log('[Generate] Client disconnected');
+      console.log(`[${getTimestamp()}] [GENERATE] ⚠ Клиент отключился`);
     });
 
     // Проверка конфигурации
@@ -296,7 +325,11 @@ async function generateStreamHandler(req, res, next) {
       return res.end();
     }
 
-    console.log(`[Generate] Start | user: ${req.user?.id || 'unknown'} | question: ${question.slice(0, 100)}`);
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[${getTimestamp()}] [GENERATE] 🚀 Начало генерации проекта`);
+    console.log(`[${getTimestamp()}] [GENERATE] User: ${req.user?.id || 'unknown'}`);
+    console.log(`[${getTimestamp()}] [GENERATE] Запрос: ${question.slice(0, 100)}${question.length > 100 ? '...' : ''}`);
+    console.log(`${'='.repeat(80)}\n`);
 
     // projectRoot передаётся клиентом в query
     const projectRoot = req.query.projectRoot;
@@ -312,9 +345,10 @@ async function generateStreamHandler(req, res, next) {
       projectRoot
     };
 
-    console.log(`[Generate] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot}`);
+    console.log(`[${getTimestamp()}] [GENERATE] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot}`);
 
     // Этап 1: Планирование
+    console.log(`\n[${getTimestamp()}] [PLANNER] 📋 Этап 1: Планирование проекта`);
     sendEvent(res, { type: 'status', message: 'Планируем проект...' });
 
     const baseUrl = config.flowiseUrl.replace(/\/+$/, '');
@@ -322,8 +356,8 @@ async function generateStreamHandler(req, res, next) {
 
     let plan;
     try {
-      const plannerResponse = await callFlowiseHttp(plannerUrl, { question, chatId }, config.flowiseToken, vars);
-      console.log('[Generate] Planner raw response:', JSON.stringify(plannerResponse).slice(0, 500));
+      const plannerResponse = await callFlowiseHttp(plannerUrl, { question, chatId }, config.flowiseToken, vars, 'PLANNER');
+      console.log(`[${getTimestamp()}] [PLANNER] Ответ получен, парсинг плана...`);
       const files = parsePlan(plannerResponse);
       
       if (!Array.isArray(files) || files.length === 0) {
@@ -331,41 +365,61 @@ async function generateStreamHandler(req, res, next) {
       }
 
       plan = files;
-      console.log(`[Generate] Plan received: ${plan.length} files`);
+      console.log(`[${getTimestamp()}] [PLANNER] ✓ План создан: ${plan.length} файлов`);
+      plan.forEach((f, i) => {
+        const actionIcon = f.action === 'edit' ? '✏️' : '➕';
+        console.log(`[${getTimestamp()}] [PLANNER]   ${i + 1}. ${actionIcon} ${f.name} (${f.action}) - ${f.description?.slice(0, 60) || 'без описания'}`);
+      });
       sendEvent(res, { type: 'plan', files: plan });
     } catch (err) {
-      console.error('[Generate] Planner error:', err.message);
+      console.error(`[${getTimestamp()}] [PLANNER] ✗ Ошибка планирования: ${err.message}`);
       sendEvent(res, { type: 'error', message: `Ошибка планирования: ${err.message}` });
       return res.end();
     }
 
     // Этап 2: Генерация файлов
+    console.log(`\n[${getTimestamp()}] [GENERATOR] 📝 Этап 2: Генерация файлов (${plan.length} шт.)`);
     const generatorUrl = `${baseUrl}/api/v1/prediction/${config.generatorFlowId}`;
     const writtenFiles = [];
 
-    for (const fileSpec of plan) {
+    for (let i = 0; i < plan.length; i++) {
+      const fileSpec = plan[i];
       if (aborted) {
-        console.log('[Generate] Aborted by client');
+        console.log(`[${getTimestamp()}] [GENERATOR] ⚠ Генерация отменена клиентом`);
         break;
       }
 
       const fileName = sanitizeName(fileSpec.name);
-      sendEvent(res, { type: 'file_start', name: fileName });
+      const action = fileSpec.action || 'create';
+      console.log(`\n[${getTimestamp()}] [GENERATOR] 📄 Файл ${i + 1}/${plan.length}: ${fileName} (${action})`);
+      sendEvent(res, { type: 'file_start', name: fileName, action });
 
       try {
-        // Генерация файла
-        const generatorQuestion = `Сгенерируй файл ${fileName}: ${fileSpec.description || ''}. Контекст задачи: ${question}`;
-        const generatorResponse = await callFlowiseHttp(generatorUrl, { question: generatorQuestion }, config.flowiseToken, vars);
-        const content = extractFileContent(generatorResponse);
-
-        // Запись файла
-        const result = await writeSingleFile(projectRoot, fileName, content);
+        // Генерация файла с указанием action
+        const generatorQuestion = `Action: ${action}\nFile: ${fileName}\nDescription: ${fileSpec.description || ''}\nContext: ${question}`;
+        const generatorResponse = await callFlowiseHttp(generatorUrl, { question: generatorQuestion }, config.flowiseToken, vars, `GENERATOR [${fileName}]`);
+        
+        // Generator Agent сам записывает файл через MCP write_project_file
+        // Backend только проверяет, что файл создан
+        const path = require('path');
+        const fs = require('fs');
+        const fullPath = path.join(projectRoot, fileName);
+        
+        // Проверяем, что файл существует
+        if (!fs.existsSync(fullPath)) {
+          throw new Error(`File ${fileName} was not created by Generator Agent`);
+        }
+        
+        const result = {
+          name: fileName,
+          fullPath: fullPath
+        };
         writtenFiles.push(result);
 
-        console.log(`[Generate] File written: ${fileName}`);
+        console.log(`[${getTimestamp()}] [GENERATOR] ✓ Файл записан: ${fileName}`);
         sendEvent(res, { type: 'file_done', name: result.name, fullPath: result.fullPath });
       } catch (err) {
-        console.error(`[Generate] File error (${fileName}):`, err.message);
+        console.error(`[${getTimestamp()}] [GENERATOR] ✗ Ошибка файла ${fileName}: ${err.message}`);
         sendEvent(res, { type: 'error', message: `Ошибка файла ${fileName}: ${err.message}` });
         // Продолжаем генерацию следующих файлов
       }
@@ -373,7 +427,9 @@ async function generateStreamHandler(req, res, next) {
 
     // Завершение
     if (!aborted) {
-      console.log(`[Generate] Done | ${writtenFiles.length} files written`);
+      console.log(`\n${'='.repeat(80)}`);
+      console.log(`[${getTimestamp()}] [GENERATE] ✅ Генерация завершена | Создано файлов: ${writtenFiles.length}/${plan.length}`);
+      console.log(`${'='.repeat(80)}\n`);
       const usage = getUsage('global');
       sendEvent(res, { type: 'done', files: writtenFiles, tokenUsage: usage });
     }

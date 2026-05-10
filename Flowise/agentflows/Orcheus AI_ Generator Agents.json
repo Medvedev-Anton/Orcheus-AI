@@ -200,8 +200,8 @@
     {
       "id": "agentAgentflow_0",
       "position": {
-        "x": 229.99606970015486,
-        "y": 51.676402879977076
+        "x": 230.49606970015486,
+        "y": 51.176402879977076
       },
       "data": {
         "id": "agentAgentflow_0",
@@ -498,7 +498,7 @@
               "agentMemoryType": "windowSize"
             },
             "id": "agentAgentflow_0-input-agentMemoryWindowSize-number",
-            "display": false
+            "display": true
           },
           {
             "label": "Max Token Limit",
@@ -653,24 +653,11 @@
           "agentMessages": [
             {
               "role": "system",
-              "content": "<p>Ты опытный full-stack разработчик с доступом к инструментам для работы с файлами проекта.</p><p>ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:</p><p>1. ВСЕГДА вызывай read_project_file ПЕРЕД изменением существующего файла</p><p>2. ВСЕГДА вызывай list_project_files ПЕРЕД созданием новых файлов</p><p>3. НИКОГДА не заменяй файл полностью - вноси только необходимые изменения</p><p>4. Используй search_in_project для поиска зависимостей и связей</p><p>РАБОЧИЙ ПРОЦЕСС:</p><p>1. Получить задачу (название файла, описание, контекст)</p><p>2. Проверить структуру проекта (list_project_files)</p><p>3. Если файл существует - прочитать его (read_project_file)</p><p>4. Проанализировать существующий код</p><p>5. Внести минимальные необходимые изменения</p><p>6. Вернуть ПОЛНОЕ содержимое файла (без markdown, без ```code blocks```)</p><p>ФОРМАТ ОТВЕТА:</p><p>- Только чистый код/текст файла</p><p>- Без пояснений до или после кода</p><p>- Без заглушек типа '// TODO' или '...'</p><p>- Готовый к записи на диск</p><p>ЗАПРЕЩЕНО:</p><p>- Создавать файлы без проверки структуры проекта</p><p>- Изменять файлы без предварительного чтения</p><p>- Удалять существующий код без необходимости</p><p>- Заменять весь файл ради изменения одной строки</p><p></p>"
+              "content": "<p>Ты опытный full-stack разработчик с доступом к инструментам для работы с файлами проекта.</p><p>ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:</p><p>1. Получи задачу с указанием action: \"create\" или \"edit\"</p><p>2. Для action: \"create\" - создай новый файл с нуля</p><p>3. Для action: \"edit\" - ОБЯЗАТЕЛЬНО сначала прочитай файл, затем внеси изменения</p><p>4. НИКОГДА не заменяй файл полностью - вноси только необходимые изменения</p><p>РАБОЧИЙ ПРОЦЕСС:</p><p>1. Получить задачу (название файла, action, описание)</p><p>2. Определить action:</p><p>   ЕСЛИ action: \"create\":</p><p>   - Сразу сгенерировать код</p><p>   - Вызвать write_project_file</p><p>   </p><p>   ЕСЛИ action: \"edit\":</p><p>   - Вызвать read_project_file</p><p>   - Проанализировать существующий код</p><p>   - Внести ТОЛЬКО указанные изменения</p><p>   - Вызвать write_project_file с обновленным содержимым</p><p>3. Вернуть результат</p><p>КРИТИЧЕСКИ ВАЖНО ДЛЯ РЕДАКТИРОВАНИЯ:</p><p>- Всегда читай файл перед редактированием</p><p>- Сохраняй всю структуру и стиль кода</p><p>- Меняй только то, что указано в описании</p><p>- Не удаляй существующий функционал</p><p></p>"
             }
           ],
           "agentToolsBuiltInOpenAI": "",
           "agentTools": [
-            {
-              "agentSelectedTool": "customTool",
-              "agentSelectedToolRequiresHumanInput": "",
-              "agentSelectedToolConfig": {
-                "selectedTool": "30d57ec4-7499-40f5-9c3b-d85a9cf52480",
-                "returnDirect": "",
-                "customToolName": "",
-                "customToolDesc": "",
-                "customToolSchema": "",
-                "customToolFunc": "",
-                "agentSelectedTool": "customTool"
-              }
-            },
             {
               "agentSelectedTool": "customTool",
               "agentSelectedToolRequiresHumanInput": "",
@@ -688,7 +675,7 @@
               "agentSelectedTool": "customTool",
               "agentSelectedToolRequiresHumanInput": "",
               "agentSelectedToolConfig": {
-                "selectedTool": "2e59e70b-805c-45d4-934f-3ff5421f16ae",
+                "selectedTool": "ec9dfb12-d61d-42a1-9ac5-691581d46619",
                 "returnDirect": "",
                 "customToolName": "",
                 "customToolDesc": "",
@@ -701,7 +688,7 @@
           "agentKnowledgeDocumentStores": "",
           "agentKnowledgeVSEmbeddings": "",
           "agentEnableMemory": true,
-          "agentMemoryType": "allMessages",
+          "agentMemoryType": "windowSize",
           "agentUserMessage": "",
           "agentReturnResponseAs": "userMessage",
           "agentStructuredOutput": "",
@@ -709,9 +696,9 @@
           "agentModelConfig": {
             "cache": "",
             "modelName": "deepseek-v4-flash",
-            "temperature": "0.6",
-            "streaming": true,
-            "maxTokens": "18000",
+            "temperature": "0.3",
+            "streaming": false,
+            "maxTokens": "8000",
             "topP": "",
             "frequencyPenalty": "",
             "presencePenalty": "",
@@ -719,7 +706,8 @@
             "basepath": "http://localhost:3001/v1",
             "baseOptions": "",
             "agentModel": "chatOpenAICustom"
-          }
+          },
+          "agentMemoryWindowSize": "10"
         },
         "outputAnchors": [
           {
@@ -735,8 +723,8 @@
       "width": 213,
       "height": 100,
       "positionAbsolute": {
-        "x": 229.99606970015486,
-        "y": 51.676402879977076
+        "x": 230.49606970015486,
+        "y": 51.176402879977076
       },
       "selected": false,
       "dragging": false

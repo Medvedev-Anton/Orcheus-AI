@@ -8,6 +8,15 @@ const { FLOWISE_TIMEOUT, BACKEND_URL } = require('../config/constants');
 const { getSupabaseClient } = require('./auth');
 
 /**
+ * Форматирование времени для логов
+ * @returns {string} Время в формате HH:MM:SS
+ */
+function getTimestamp() {
+  const now = new Date();
+  return now.toTimeString().split(' ')[0]; // HH:MM:SS
+}
+
+/**
  * Попытка парсинга JSON
  * @param {string} value - Строка для парсинга
  * @returns {object|null} Распарсенный объект или null
@@ -68,6 +77,8 @@ function extractFiles(payload) {
  * @returns {Promise<object>} Ответ от Backend
  */
 async function callFlowise(question, chatId, settings, progressCb) {
+  const startTime = Date.now();
+  
   // Получаем JWT токен из Supabase сессии
   const supabase = getSupabaseClient();
   const { data: { session } } = await supabase.auth.getSession();
@@ -97,8 +108,11 @@ async function callFlowise(question, chatId, settings, progressCb) {
       'Authorization': `Bearer ${session.access_token}`,
     };
 
-    console.log(`[Backend] → POST ${baseUrl}/api/predict`);
-    console.log(`[Backend] Вопрос: ${question.slice(0, 120)}${question.length > 120 ? '...' : ''}`);
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[${getTimestamp()}] [CLIENT] 🚀 Отправка запроса к Backend`);
+    console.log(`[${getTimestamp()}] [CLIENT] URL: ${baseUrl}/api/predict`);
+    console.log(`[${getTimestamp()}] [CLIENT] Вопрос: ${question.slice(0, 120)}${question.length > 120 ? '...' : ''}`);
+    console.log(`${'='.repeat(80)}\n`);
     progressCb?.('Подключаемся к серверу...');
 
     const req = mod.request(
@@ -115,14 +129,17 @@ async function callFlowise(question, chatId, settings, progressCb) {
         res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => {
           const text = Buffer.concat(chunks).toString('utf8');
-          console.log(`[Backend] HTTP ${res.statusCode} | ${text.length} байт`);
+          const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+          
+          console.log(`[${getTimestamp()}] [CLIENT] ✓ Ответ получен | HTTP ${res.statusCode} | Время: ${duration}s | Размер: ${text.length} байт`);
+          
           if (res.statusCode !== 200) {
             let errMsg = text.slice(0, 500);
             try {
               const errJson = JSON.parse(text);
               if (errJson.message) errMsg = errJson.message;
             } catch { /* raw text */ }
-            console.error(`[Backend] Ошибка ${res.statusCode}:`, errMsg);
+            console.error(`[${getTimestamp()}] [CLIENT] ✗ Ошибка ${res.statusCode}: ${errMsg}`);
             return reject(new Error(errMsg));
           }
           progressCb?.('Обрабатываем ответ...');
@@ -135,12 +152,15 @@ async function callFlowise(question, chatId, settings, progressCb) {
     );
 
     req.on('error', (err) => {
-      console.error('[Backend] Ошибка соединения:', err.message);
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.error(`[${getTimestamp()}] [CLIENT] ✗ Ошибка соединения | Время: ${duration}s | ${err.message}`);
       reject(err);
     });
     
     req.setTimeout(FLOWISE_TIMEOUT, () => {
       req.destroy();
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.error(`[${getTimestamp()}] [CLIENT] ✗ Таймаут запроса | Время: ${duration}s (лимит: 15 минут)`);
       reject(new Error('Таймаут запроса (15 минут)'));
     });
     
@@ -160,6 +180,7 @@ async function callFlowise(question, chatId, settings, progressCb) {
 function startGenerate(question, chatId, projectRoot, onEvent) {
   const supabase = getSupabaseClient();
   let req = null;
+  const startTime = Date.now();
 
   supabase.auth.getSession().then(({ data: { session } }) => {
     if (!session?.access_token) {
@@ -179,6 +200,13 @@ function startGenerate(question, chatId, projectRoot, onEvent) {
 
     const isHttps = parsed.protocol === 'https:';
     const mod = isHttps ? https : http;
+
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[${getTimestamp()}] [CLIENT-SSE] 🚀 Начало SSE-соединения`);
+    console.log(`[${getTimestamp()}] [CLIENT-SSE] URL: ${baseUrl}/api/generate/stream`);
+    console.log(`[${getTimestamp()}] [CLIENT-SSE] Вопрос: ${question.slice(0, 100)}${question.length > 100 ? '...' : ''}`);
+    console.log(`[${getTimestamp()}] [CLIENT-SSE] Project Root: ${projectRoot}`);
+    console.log(`${'='.repeat(80)}\n`);
 
     req = mod.request(
       {
@@ -206,9 +234,26 @@ function startGenerate(question, chatId, projectRoot, onEvent) {
             const jsonStr = line.slice('data:'.length).trim();
             try {
               const event = JSON.parse(jsonStr);
+              
+              // Логирование событий
+              if (event.type === 'plan') {
+                console.log(`[${getTimestamp()}] [CLIENT-SSE] 📋 План получен: ${event.files?.length || 0} файлов`);
+              } else if (event.type === 'file_start') {
+                console.log(`[${getTimestamp()}] [CLIENT-SSE] 📄 Начало генерации: ${event.name}`);
+              } else if (event.type === 'file_done') {
+                console.log(`[${getTimestamp()}] [CLIENT-SSE] ✓ Файл готов: ${event.name}`);
+              } else if (event.type === 'error') {
+                console.error(`[${getTimestamp()}] [CLIENT-SSE] ✗ Ошибка: ${event.message}`);
+              } else if (event.type === 'done') {
+                const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+                console.log(`\n${'='.repeat(80)}`);
+                console.log(`[${getTimestamp()}] [CLIENT-SSE] ✅ Генерация завершена | Время: ${duration}s | Файлов: ${event.files?.length || 0}`);
+                console.log(`${'='.repeat(80)}\n`);
+              }
+              
               onEvent(event);
             } catch (e) {
-              console.error('[SSE] Parse error:', e.message, jsonStr.slice(0, 100));
+              console.error(`[${getTimestamp()}] [CLIENT-SSE] ✗ Parse error: ${e.message} | Data: ${jsonStr.slice(0, 100)}`);
             }
           }
         });
@@ -221,26 +266,31 @@ function startGenerate(question, chatId, projectRoot, onEvent) {
               onEvent(JSON.parse(jsonStr));
             } catch { /* ignore */ }
           }
+          console.log(`[${getTimestamp()}] [CLIENT-SSE] 🔌 SSE-соединение закрыто`);
         });
 
         res.on('error', (err) => {
+          console.error(`[${getTimestamp()}] [CLIENT-SSE] ✗ Ошибка SSE-соединения: ${err.message}`);
           onEvent({ type: 'error', message: 'Ошибка SSE-соединения: ' + err.message });
         });
       }
     );
 
     req.on('error', (err) => {
+      console.error(`[${getTimestamp()}] [CLIENT-SSE] ✗ Ошибка соединения с сервером: ${err.message}`);
       onEvent({ type: 'error', message: 'Ошибка соединения с сервером: ' + err.message });
     });
 
     req.end();
   }).catch((err) => {
+    console.error(`[${getTimestamp()}] [CLIENT-SSE] ✗ Ошибка авторизации: ${err.message}`);
     onEvent({ type: 'error', message: 'Ошибка авторизации: ' + err.message });
   });
 
   return {
     cancel: () => {
       if (req) {
+        console.log(`[${getTimestamp()}] [CLIENT-SSE] ⚠ Отмена SSE-соединения`);
         req.destroy();
         req = null;
       }

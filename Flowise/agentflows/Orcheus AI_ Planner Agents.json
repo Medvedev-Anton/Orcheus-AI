@@ -653,7 +653,7 @@
           "agentMessages": [
             {
               "role": "system",
-              "content": "<p>Ты опытный архитектор программных проектов с доступом к инструментам для работы с файлами.</p><p>ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:</p><p>1. ВСЕГДА вызывай list_project_files В НАЧАЛЕ работы</p><p>2. Проверяй, какие файлы уже существуют в проекте</p><p>3. Не дублируй существующие файлы</p><p>4. Интегрируй новые файлы в существующую структуру</p><p>РАБОЧИЙ ПРОЦЕСС:</p><p>1. Изучить структуру проекта (list_project_files)</p><p>2. Определить, какие файлы уже существуют</p><p>3. Составить список ТОЛЬКО новых файлов или файлов для изменения</p><p>4. Для каждого файла указать:</p><p>   - name: относительный путь (например: index.html, css/styles.css)</p><p>   - description: конкретное описание содержимого (1-2 предложения)</p><p>ПРАВИЛА ПЛАНИРОВАНИЯ:</p><p>- Для веб-сайта с несколькими страницами — создавай отдельный HTML для каждой страницы</p><p>- Разделяй HTML, CSS и JavaScript по отдельным файлам</p><p>- Если нужны компоненты, утилиты, конфиги — выноси их в отдельные файлы</p><p>- Минимум файлов: столько, сколько реально нужно для задачи</p><p>ЗАПРЕЩЕНО:</p><p>- Планировать файлы без проверки существующей структуры</p><p>- Дублировать существующие файлы</p><p>- Игнорировать существующую архитектуру проекта</p><p></p>"
+              "content": "<p>Ты опытный архитектор программных проектов.</p><p>ТВОЯ ЗАДАЧА: Составить список файлов для проекта с указанием действия (создание или редактирование).</p><p>ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:</p><p>1. Вызови list_project_files ОДИН РАЗ в начале</p><p>2. НЕ читай содержимое файлов (у тебя нет read_project_file)</p><p>3. НЕ пиши код - только планируй структуру</p><p>4. Верни список файлов в формате JSON</p><p>РАБОЧИЙ ПРОЦЕСС:</p><p>1. Вызвать list_project_files ОДИН РАЗ</p><p>2. Проанализировать существующую структуру</p><p>3. Определить, какие файлы нужны</p><p>4. Для КАЖДОГО файла определить:</p><p>- Если файл НЕ существует → action: \"create\"</p><p>- Если файл существует → action: \"edit\"</p><p>5. Вернуть JSON массив</p><p>ФОРМАТ ОТВЕТА (строго JSON):</p><p>Верни ТОЛЬКО JSON массив без дополнительного текста:</p><p>[</p><p>  {</p><p>    \"name\": \"index.html\",</p><p>    \"action\": \"edit\",</p><p>    \"description\": \"Заменить предложение в hero-секции на новый слоган\"</p><p>  },</p><p>  {</p><p>    \"name\": \"about.html\",</p><p>    \"action\": \"create\",</p><p>    \"description\": \"Новая страница О компании\"</p><p>  }</p><p>]</p><p>НЕ оборачивай ответ в markdown блоки (```json).</p><p>НЕ добавляй никакого текста до или после JSON.</p><p>Верни ТОЛЬКО чистый JSON массив.</p><p></p><p>ВАЖНО:</p><p>- action может быть только \"create\" или \"edit\"</p><p>- Для action: \"edit\" в description укажи КОНКРЕТНЫЕ изменения</p><p>- Для action: \"create\" в description укажи назначение файла</p><p>ЗАПРЕЩЕНО:</p><p>- Читать содержимое файлов</p><p>- Писать код</p><p>- Дублировать существующие файлы</p><p>- Возвращать что-то кроме JSON массива</p><p></p>"
             }
           ],
           "agentToolsBuiltInOpenAI": "",
@@ -670,19 +670,6 @@
                 "customToolFunc": "",
                 "agentSelectedTool": "customTool"
               }
-            },
-            {
-              "agentSelectedTool": "customTool",
-              "agentSelectedToolRequiresHumanInput": "",
-              "agentSelectedToolConfig": {
-                "selectedTool": "2ce707e7-91ec-4e6d-95e5-5cedf087e031",
-                "returnDirect": "",
-                "customToolName": "",
-                "customToolDesc": "",
-                "customToolSchema": "",
-                "customToolFunc": "",
-                "agentSelectedTool": "customTool"
-              }
             }
           ],
           "agentKnowledgeDocumentStores": "",
@@ -691,22 +678,14 @@
           "agentMemoryType": "allMessages",
           "agentUserMessage": "",
           "agentReturnResponseAs": "userMessage",
-          "agentStructuredOutput": [
-            {
-              "key": "files",
-              "type": "jsonArray",
-              "enumValues": "",
-              "jsonSchema": "{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"name\": { \"type\": \"string\" },\n      \"description\": { \"type\": \"string\" }\n    },\n    \"required\": [\"name\", \"description\"]\n  }\n}",
-              "description": ""
-            }
-          ],
+          "agentStructuredOutput": [],
           "agentUpdateState": "",
           "agentModelConfig": {
             "cache": "",
             "modelName": "deepseek-v4-flash",
             "temperature": "0.5",
-            "streaming": true,
-            "maxTokens": "4998",
+            "streaming": false,
+            "maxTokens": "5000",
             "topP": "",
             "frequencyPenalty": "",
             "presencePenalty": "",

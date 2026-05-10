@@ -10,10 +10,21 @@ const { config, isConfigured } = require('../config');
 const FLOWISE_TIMEOUT = 0; // Без таймаута — AgentFlow может работать долго
 
 /**
+ * Форматирование времени для логов
+ * @returns {string} Время в формате HH:MM:SS
+ */
+function getTimestamp() {
+  const now = new Date();
+  return now.toTimeString().split(' ')[0]; // HH:MM:SS
+}
+
+/**
  * POST /api/predict
  * Проксирует запрос к Flowise API
  */
 async function predictHandler(req, res, next) {
+  const startTime = Date.now();
+  
   try {
     // Проверка конфигурации (Requirement 5.2)
     if (!isConfigured || !config.flowiseUrl || !config.flowId) {
@@ -80,9 +91,14 @@ async function predictHandler(req, res, next) {
       'Authorization': `Bearer ${config.flowiseToken}`
     };
 
-    console.log(`[Predict] → POST ${flowiseUrl} | user: ${req.user?.id || 'unknown'}`);
-    console.log(`[Predict] Config: flowiseUrl=${config.flowiseUrl}, flowId=${config.flowId}, token=${config.flowiseToken ? 'set' : 'missing'}`);
-    console.log(`[Predict] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot || 'not set'}`);
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[${getTimestamp()}] [PREDICT] 🚀 Запрос к Flowise API`);
+    console.log(`[${getTimestamp()}] [PREDICT] URL: ${flowiseUrl}`);
+    console.log(`[${getTimestamp()}] [PREDICT] User: ${req.user?.id || 'unknown'}`);
+    console.log(`[${getTimestamp()}] [PREDICT] Flow ID: ${config.flowId}`);
+    console.log(`[${getTimestamp()}] [PREDICT] Node: Agent 0 (Main Agent)`);
+    console.log(`[${getTimestamp()}] [PREDICT] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot || 'not set'}`);
+    console.log(`${'='.repeat(80)}\n`);
 
     // Запрос к Flowise (Requirement 3.4 - таймаут 280 сек)
     const flowiseReq = mod.request(
@@ -99,21 +115,24 @@ async function predictHandler(req, res, next) {
         flowiseRes.on('data', (chunk) => chunks.push(chunk));
         flowiseRes.on('end', () => {
           const text = Buffer.concat(chunks).toString('utf8');
+          const duration = ((Date.now() - startTime) / 1000).toFixed(2);
           
           // Обработка ошибок Flowise (Requirements 3.2, 3.3)
           if (flowiseRes.statusCode >= 500) {
-            console.error(`[Predict] Flowise error ${flowiseRes.statusCode}:`, text.slice(0, 200));
+            console.error(`[${getTimestamp()}] [PREDICT] ✗ Flowise error ${flowiseRes.statusCode} | Время: ${duration}s`);
+            console.error(`[${getTimestamp()}] [PREDICT] Ответ: ${text.slice(0, 200)}`);
             return res.status(502).json({ error: 'Ошибка соединения с Flowise' });
           }
           
           if (flowiseRes.statusCode !== 200) {
-            console.error(`[Predict] Flowise error ${flowiseRes.statusCode}:`, text.slice(0, 200));
+            console.error(`[${getTimestamp()}] [PREDICT] ✗ Flowise error ${flowiseRes.statusCode} | Время: ${duration}s`);
+            console.error(`[${getTimestamp()}] [PREDICT] Ответ: ${text.slice(0, 200)}`);
             // Пробрасываем статус ошибки Flowise
             return res.status(flowiseRes.statusCode).json({ error: text.slice(0, 500) });
           }
 
           // Успешный ответ (Requirement 3.1)
-          console.log(`[Predict] ← HTTP ${flowiseRes.statusCode} | ${text.length} байт`);
+          console.log(`[${getTimestamp()}] [PREDICT] ✓ Ответ получен | HTTP ${flowiseRes.statusCode} | Время: ${duration}s | Размер: ${text.length} байт`);
           res.set('Content-Type', 'application/json');
           res.send(text);
         });
@@ -121,7 +140,8 @@ async function predictHandler(req, res, next) {
     );
 
     flowiseReq.on('error', (err) => {
-      console.error('[Predict] Ошибка соединения:', err.message);
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.error(`[${getTimestamp()}] [PREDICT] ✗ Ошибка соединения | Время: ${duration}s | ${err.message}`);
       if (!res.headersSent) {
         res.status(502).json({ error: 'Ошибка соединения с Flowise' });
       }
@@ -129,7 +149,8 @@ async function predictHandler(req, res, next) {
 
     flowiseReq.on('timeout', () => {
       flowiseReq.destroy();
-      console.error('[Predict] Таймаут запроса к Flowise');
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.error(`[${getTimestamp()}] [PREDICT] ✗ Таймаут запроса | Время: ${duration}s`);
       if (!res.headersSent) {
         res.status(502).json({ error: 'Таймаут: AgentFlow выполняется слишком долго' });
       }
