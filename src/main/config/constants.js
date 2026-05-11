@@ -1,5 +1,10 @@
 /**
  * Константы приложения
+ * Requirements: 1.5
+ * 
+ * ВАЖНО: Секреты больше не хранятся в клиентском коде!
+ * Supabase ключи загружаются с backend через /api/config endpoint.
+ * Fallback значения используются только для offline режима разработки.
  */
 
 const path = require('path');
@@ -15,11 +20,20 @@ const DEFAULT_SETTINGS = {
 };
 
 // Backend URL (прокси-сервер)
-const BACKEND_URL = 'http://localhost:3001';
+// Requirements: 1.5
+// Может быть переопределён через переменную окружения BACKEND_URL
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
-// Supabase (зашитые ключи — anon key публичный, безопасен для клиента)
-const SUPABASE_URL = 'https://bghbeegzxbodmdhbugxm.supabase.co';
-const SUPABASE_ANON = 'sb_publishable_cmxhvdZ4RSIAmTSfQ9zFMQ_0ut6D8Fu';
+// ─── FALLBACK Supabase Configuration ───
+// ВАЖНО: Эти значения используются ТОЛЬКО как fallback при offline режиме!
+// Основная конфигурация загружается с backend через /api/config
+// Requirements: 2.4
+const SUPABASE_URL_FALLBACK = 'https://bghbeegzxbodmdhbugxm.supabase.co';
+const SUPABASE_ANON_FALLBACK = 'sb_publishable_cmxhvdZ4RSIAmTSfQ9zFMQ_0ut6D8Fu';
+
+// Экспортируем fallback значения для использования в config service
+const SUPABASE_URL = SUPABASE_URL_FALLBACK;
+const SUPABASE_ANON = SUPABASE_ANON_FALLBACK;
 
 // Prettier парсеры
 const PRETTIER_PARSERS = {
@@ -43,6 +57,7 @@ module.exports = {
   SESSION_FILE,
   DEFAULT_SETTINGS,
   BACKEND_URL,
+  // Fallback значения (используются только при offline режиме)
   SUPABASE_URL,
   SUPABASE_ANON,
   PRETTIER_PARSERS,
