@@ -22,7 +22,8 @@ const DEFAULT_SETTINGS = {
 // Backend URL (прокси-сервер)
 // Requirements: 1.5
 // Может быть переопределён через переменную окружения BACKEND_URL
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+// По умолчанию指向 продакшен-сервер
+const BACKEND_URL = process.env.BACKEND_URL || 'https://api.orcheus-ai.ru';
 
 // ─── FALLBACK Supabase Configuration ───
 // ВАЖНО: Эти значения используются ТОЛЬКО как fallback при offline режиме!

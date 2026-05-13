@@ -176,6 +176,25 @@ export class ChatPanel {
       }
 
       case 'file_done': {
+        // Записываем файл локально
+        if (event.name && event.content) {
+          const projectRoot = this.state.getSettings()?.projectRoot;
+          if (projectRoot) {
+            // Формируем полный путь к файлу
+            const path = require('path');
+            const fullPath = path.join(projectRoot, event.name);
+            
+            // Вызываем IPC для записи файла
+            window.api.writeFile(fullPath, event.content).then(result => {
+              if (result.ok) {
+                console.log(`[ChatPanel] Файл записан: ${event.name}`);
+              } else {
+                console.error(`[ChatPanel] Ошибка записи файла: ${result.error}`);
+              }
+            }).catch(console.error);
+          }
+        }
+        
         if (this._lastFileMessageEl) {
           const bubble = this._lastFileMessageEl.querySelector('.msg-bubble');
           if (bubble) bubble.textContent = `✅ Файл \`${event.name}\` создан`;
@@ -186,7 +205,7 @@ export class ChatPanel {
           const btn = document.createElement('button');
           btn.className = 'chip';
           btn.textContent = `${fileIcon(event.name)} ${event.name}`;
-          btn.title = event.fullPath;
+          btn.title = event.name;
           btn.addEventListener('click', () => {
             window.dispatchEvent(new CustomEvent('open-file', { detail: event }));
           });

@@ -399,25 +399,44 @@ async function generateStreamHandler(req, res, next) {
         const generatorQuestion = `Action: ${action}\nFile: ${fileName}\nDescription: ${fileSpec.description || ''}\nContext: ${question}`;
         const generatorResponse = await callFlowiseHttp(generatorUrl, { question: generatorQuestion }, config.flowiseToken, vars, `GENERATOR [${fileName}]`);
         
-        // Generator Agent сам записывает файл через MCP write_project_file
-        // Backend только проверяет, что файл создан
-        const path = require('path');
-        const fs = require('fs');
-        const fullPath = path.join(projectRoot, fileName);
+        // Извлекаем содержимое файла из ответа Generator Agent
+        // Generator вызывает write_project_file, который возвращает { success, action, path, content }
+        let fileContent = null;
+        let filePath = fileName;
         
-        // Проверяем, что файл существует
-        if (!fs.existsSync(fullPath)) {
-          throw new Error(`File ${fileName} was not created by Generator Agent`);
+        // Пытаемся извлечь из разных форматов ответа
+        if (typeof generatorResponse === 'string') {
+          try {
+            const parsed = JSON.parse(generatorResponse);
+            if (parsed.action === 'write_file' && parsed.content) {
+              fileContent = parsed.content;
+              filePath = parsed.path || fileName;
+            }
+          } catch {
+            // Если не JSON, возможно это просто содержимое файла
+            fileContent = generatorResponse;
+          }
+        } else if (generatorResponse?.action === 'write_file') {
+          fileContent = generatorResponse.content;
+          filePath = generatorResponse.path || fileName;
+        } else if (generatorResponse?.text) {
+          fileContent = generatorResponse.text;
+        } else if (generatorResponse?.content) {
+          fileContent = generatorResponse.content;
+        }
+        
+        if (!fileContent) {
+          throw new Error(`Generator did not return file content for ${fileName}`);
         }
         
         const result = {
-          name: fileName,
-          fullPath: fullPath
+          name: filePath,
+          content: fileContent
         };
         writtenFiles.push(result);
 
-        console.log(`[${getTimestamp()}] [GENERATOR] ✓ Файл записан: ${fileName}`);
-        sendEvent(res, { type: 'file_done', name: result.name, fullPath: result.fullPath });
+        console.log(`[${getTimestamp()}] [GENERATOR] ✓ Файл сгенерирован: ${filePath} (${fileContent.length} байт)`);
+        sendEvent(res, { type: 'file_done', name: result.name, content: result.content });
       } catch (err) {
         console.error(`[${getTimestamp()}] [GENERATOR] ✗ Ошибка файла ${fileName}: ${err.message}`);
         sendEvent(res, { type: 'error', message: `Ошибка файла ${fileName}: ${err.message}` });

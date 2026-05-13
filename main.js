@@ -6,6 +6,10 @@
  * Requirements: 2.3
  */
 
+// Загрузка переменных окружения из .env файла
+// ВАЖНО: должен быть до импорта других модулей!
+require('dotenv').config();
+
 const { app, BrowserWindow } = require('electron');
 const { createWindow, getMainWindow } = require('./src/main/window');
 const { registerSettingsHandlers } = require('./src/main/ipc/settings-handlers');

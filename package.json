@@ -14,8 +14,14 @@
       "output": "dist"
     },
     "win": {
-      "target": "nsis",
-      "requestedExecutionLevel": "asInvoker"
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "requestedExecutionLevel": "asInvoker",
+      "sign": null
     },
     "files": [
       "main.js",

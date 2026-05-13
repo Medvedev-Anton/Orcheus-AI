@@ -33,7 +33,7 @@ async function init() {
   
   // Проверить авторизацию
   const authResult = await window.api.getUser();
-  state.setUser(authResult.user);
+  state.setUser(authResult?.user);
   
   // Инициализировать компоненты
   authModal = new AuthModal(state);
