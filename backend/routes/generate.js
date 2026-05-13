@@ -158,6 +158,322 @@ function tryParseJson(value) {
   try { return JSON.parse(value); } catch { return null; }
 }
 
+function normalizePathForCompare(p) {
+  if (typeof p !== 'string' || !p.trim()) return '';
+  return path.normalize(p.replace(/\\/g, '/')).replace(/^(\.\/)+/, '').toLowerCase();
+}
+
+function pathsRoughlyMatch(a, b) {
+  const na = normalizePathForCompare(a);
+  const nb = normalizePathForCompare(b);
+  if (!na || !nb) return false;
+  return na === nb || na.endsWith(nb) || nb.endsWith(na);
+}
+
+function flattenUsedTools(root) {
+  const out = [];
+  const seen = new WeakSet();
+  function walk(obj, depth) {
+    if (depth > 25 || obj == null || typeof obj !== 'object') return;
+    if (seen.has(obj)) return;
+    seen.add(obj);
+    if (Array.isArray(obj.usedTools)) out.push(...obj.usedTools);
+    if (Array.isArray(obj.used_tools)) out.push(...obj.used_tools);
+    if (Array.isArray(obj)) {
+      for (const item of obj) walk(item, depth + 1);
+    } else {
+      for (const k of Object.keys(obj)) {
+        if (k === 'usedTools' || k === 'used_tools') continue;
+        walk(obj[k], depth + 1);
+      }
+    }
+  }
+  walk(root, 0);
+  return out;
+}
+
+function getToolInputs(tool) {
+  if (!tool || typeof tool !== 'object') return null;
+  return tool.toolInput || tool.tool_input || tool.args || tool.parameters || tool.input || null;
+}
+
+/**
+ * Flowise often puts MCP result in toolOutput as a JSON string:
+ * {"success":true,"action":"write_file","path":"index.html","content":"<!DOCTYPE..."}
+ * Prefer this over toolInput when both exist (proper newlines / escaping).
+ */
+function parseWriteFileToolOutput(raw) {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+    const content = raw.content;
+    const p = raw.path;
+    if (
+      typeof content === 'string'
+      && content.length
+      && typeof p === 'string'
+      && p.trim()
+      && (raw.action === 'write_file' || raw.success === true)
+    ) {
+      return { path: p, content };
+    }
+    return null;
+  }
+  if (typeof raw !== 'string') return null;
+  const parsed = tryParseJson(raw.trim());
+  if (!parsed || typeof parsed !== 'object') return null;
+  if (typeof parsed.content !== 'string' || !parsed.content.length) return null;
+  if (typeof parsed.path !== 'string' || !parsed.path.trim()) return null;
+  if (parsed.action === 'write_file' || parsed.success === true) {
+    return { path: parsed.path, content: parsed.content };
+  }
+  return null;
+}
+
+/**
+ * Flowise returns agent prose in `text` but real code in tool records (toolInput / toolOutput).
+ */
+function extractFromUsedTools(generatorResponse, expectedFileName) {
+  const tools = flattenUsedTools(generatorResponse);
+  const safeExpected = sanitizeName(expectedFileName);
+  const pathMatches = [];
+  const writeLike = [];
+  for (const tool of tools) {
+    const toolName = String(tool.tool || tool.name || '').toLowerCase();
+    const fromOut = parseWriteFileToolOutput(tool.toolOutput ?? tool.tool_output);
+    const inputs = getToolInputs(tool);
+
+    let fromInput = null;
+    if (inputs && typeof inputs === 'object') {
+      const p = inputs.path || inputs.filePath || inputs.file;
+      const c = inputs.content;
+      if (typeof p === 'string' && p.trim() && typeof c === 'string' && c.length) {
+        fromInput = { path: p, content: c };
+      }
+    }
+
+    let entry = null;
+    if (fromOut && fromInput && pathsRoughlyMatch(fromOut.path, fromInput.path)) {
+      entry = { path: fromInput.path, content: fromOut.content };
+    } else if (fromOut && pathsRoughlyMatch(fromOut.path, safeExpected)) {
+      entry = fromOut;
+    } else if (fromInput && pathsRoughlyMatch(fromInput.path, safeExpected)) {
+      entry = fromInput;
+    } else if (fromOut && (toolName.includes('write') || toolName.includes('project'))) {
+      entry = fromOut;
+    } else if (fromInput && (toolName.includes('write') || toolName.includes('project'))) {
+      entry = fromInput;
+    }
+
+    if (!entry) continue;
+
+    if (pathsRoughlyMatch(entry.path, safeExpected)) pathMatches.push(entry);
+    if (toolName.includes('write') || toolName.includes('project')) writeLike.push(entry);
+  }
+  if (pathMatches.length === 1) return pathMatches[0];
+  if (pathMatches.length > 1) {
+    const exact = pathMatches.find((m) => normalizePathForCompare(m.path) === normalizePathForCompare(safeExpected));
+    return exact || pathMatches[0];
+  }
+  if (writeLike.length === 1) return writeLike[0];
+  return null;
+}
+
+/**
+ * Any nested { path, content } matching the planned file (some Flowise versions omit usedTools shape).
+ */
+function extractPathContentPair(generatorResponse, expectedFileName) {
+  const safeExpected = sanitizeName(expectedFileName);
+  const matches = [];
+  const seen = new WeakSet();
+  function walk(obj, depth) {
+    if (depth > 25 || obj == null || typeof obj !== 'object') return;
+    if (seen.has(obj)) return;
+    seen.add(obj);
+    if (
+      typeof obj.path === 'string'
+      && typeof obj.content === 'string'
+      && obj.content.length > 0
+      && pathsRoughlyMatch(obj.path, safeExpected)
+    ) {
+      matches.push({ path: obj.path, content: obj.content });
+    }
+    if (Array.isArray(obj)) {
+      for (const item of obj) walk(item, depth + 1);
+    } else {
+      for (const k of Object.keys(obj)) walk(obj[k], depth + 1);
+    }
+  }
+  walk(generatorResponse, 0);
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) {
+    const exact = matches.find((m) => normalizePathForCompare(m.path) === normalizePathForCompare(safeExpected));
+    return exact || matches[0];
+  }
+  return null;
+}
+
+function deepFindWriteFilePayload(obj, depth = 0) {
+  if (depth > 25 || obj == null) return null;
+  if (typeof obj === 'object' && !Array.isArray(obj)) {
+    const content = obj.content;
+    const p = obj.path;
+    if (
+      typeof content === 'string'
+      && content.length
+      && typeof p === 'string'
+      && p.trim()
+      && (obj.action === 'write_file' || obj.success === true)
+    ) {
+      return { path: p, content };
+    }
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const r = deepFindWriteFilePayload(item, depth + 1);
+      if (r) return r;
+    }
+  } else if (typeof obj === 'object') {
+    for (const k of Object.keys(obj)) {
+      const r = deepFindWriteFilePayload(obj[k], depth + 1);
+      if (r) return r;
+    }
+  }
+  return null;
+}
+
+function extractCodeFenceFromText(text, fileName) {
+  if (typeof text !== 'string') return null;
+  const ext = path.extname(fileName || '').toLowerCase();
+  const langByExt = {
+    '.html': ['html', 'htm'],
+    '.htm': ['html'],
+    '.css': ['css'],
+    '.js': ['javascript', 'js'],
+    '.ts': ['typescript', 'ts'],
+    '.tsx': ['tsx', 'typescript'],
+    '.jsx': ['jsx', 'javascript'],
+    '.json': ['json'],
+    '.md': ['markdown', 'md'],
+  };
+  const langs = langByExt[ext] || [];
+  for (const lang of langs) {
+    const re = new RegExp('```\\s*' + lang + '\\s*\\n([\\s\\S]*?)```', 'i');
+    const m = text.match(re);
+    if (m) return m[1].trim();
+  }
+  const generic = /```(?:[a-z0-9+#]+)?\s*\n([\s\S]*?)```/i;
+  const gm = text.match(generic);
+  return gm ? gm[1].trim() : null;
+}
+
+function looksLikeNaturalLanguageSummary(s) {
+  if (typeof s !== 'string' || s.length < 40) return false;
+  const t = s.trimStart();
+  if (/^Файл\s*`/.test(t)) return true;
+  if (/^The file\s+/i.test(t)) return true;
+  if (/^Successfully\s+(created|written)/i.test(t)) return true;
+  if (/\*\*DOCTYPE\*\*/i.test(t)) return true;
+  if (/минимальный\s+HTML/i.test(t)) return true;
+  if (/следующей\s+структурой/i.test(t)) return true;
+  return false;
+}
+
+function textLooksLikeSourceCode(s) {
+  if (typeof s !== 'string') return false;
+  const t = s.trimStart();
+  if (/<!DOCTYPE/i.test(t)) return true;
+  if (/<html[\s>]/i.test(t)) return true;
+  if (/^\s*\/\//.test(t)) return true;
+  if (/^\s*import\s+/.test(t)) return true;
+  if (/^\s*export\s+/.test(t)) return true;
+  if (/^\s*function\s+/.test(t)) return true;
+  if (/^\s*class\s+/.test(t)) return true;
+  return false;
+}
+
+/**
+ * Real file bytes from Generator prediction — never prefer agent `text` over tool inputs.
+ * @param {object|string} generatorResponse
+ * @param {string} expectedFileName
+ * @returns {{ path: string, content: string }|null}
+ */
+function extractGeneratorFilePayload(generatorResponse, expectedFileName) {
+  const safeExpected = sanitizeName(expectedFileName);
+
+  if (typeof generatorResponse === 'string') {
+    try {
+      const parsed = JSON.parse(generatorResponse);
+      return extractGeneratorFilePayload(parsed, safeExpected);
+    } catch {
+      if (!looksLikeNaturalLanguageSummary(generatorResponse)) {
+        return { path: safeExpected, content: generatorResponse };
+      }
+      return null;
+    }
+  }
+
+  if (!generatorResponse || typeof generatorResponse !== 'object') return null;
+
+  if (
+    typeof generatorResponse.content === 'string'
+    && generatorResponse.content.length
+    && (generatorResponse.action === 'write_file' || generatorResponse.success === true)
+  ) {
+    return {
+      path: sanitizeName(generatorResponse.path || safeExpected),
+      content: generatorResponse.content,
+    };
+  }
+
+  const fromTools = extractFromUsedTools(generatorResponse, safeExpected);
+  if (fromTools) {
+    return { path: sanitizeName(fromTools.path), content: fromTools.content };
+  }
+
+  const pair = extractPathContentPair(generatorResponse, safeExpected);
+  if (pair) {
+    return { path: sanitizeName(pair.path), content: pair.content };
+  }
+
+  const deep = deepFindWriteFilePayload(generatorResponse);
+  if (deep && typeof deep.content === 'string') {
+    return {
+      path: sanitizeName(deep.path || safeExpected),
+      content: deep.content,
+    };
+  }
+
+  if (generatorResponse.json != null) {
+    const j = typeof generatorResponse.json === 'string'
+      ? tryParseJson(generatorResponse.json)
+      : generatorResponse.json;
+    if (j) {
+      const nested = extractGeneratorFilePayload(j, safeExpected);
+      if (nested) return nested;
+    }
+  }
+
+  if (typeof generatorResponse.text === 'string') {
+    const fenced = extractCodeFenceFromText(generatorResponse.text, safeExpected);
+    if (fenced) return { path: safeExpected, content: fenced };
+  }
+
+  if (typeof generatorResponse.content === 'string' && generatorResponse.content.length && !generatorResponse.text) {
+    if (!looksLikeNaturalLanguageSummary(generatorResponse.content)) {
+      return { path: safeExpected, content: generatorResponse.content };
+    }
+  }
+
+  if (typeof generatorResponse.text === 'string') {
+    const t = generatorResponse.text;
+    if (textLooksLikeSourceCode(t) && !looksLikeNaturalLanguageSummary(t)) {
+      return { path: safeExpected, content: t };
+    }
+  }
+
+  return null;
+}
+
 /**
  * Извлечение JSON из markdown code blocks
  * @param {string} text - Строка, которая может содержать markdown code blocks
@@ -267,33 +583,6 @@ function parsePlan(payload) {
 }
 
 /**
- * Извлечение содержимого файла из ответа Generator Flow
- * @param {object} payload - Ответ от Generator Flow
- * @returns {string}
- */
-function extractFileContent(payload) {
-  // Прямая строка
-  if (typeof payload === 'string') {
-    return payload;
-  }
-
-  // Поле text
-  if (typeof payload?.text === 'string') {
-    return payload.text;
-  }
-
-  // Поле json
-  if (payload?.json) {
-    if (typeof payload.json === 'string') {
-      return payload.json;
-    }
-    return JSON.stringify(payload.json, null, 2);
-  }
-
-  throw new Error('Invalid file content format');
-}
-
-/**
  * GET /api/generate/stream
  * SSE-эндпоинт для потоковой генерации
  */
@@ -398,44 +687,22 @@ async function generateStreamHandler(req, res, next) {
         // Генерация файла с указанием action
         const generatorQuestion = `Action: ${action}\nFile: ${fileName}\nDescription: ${fileSpec.description || ''}\nContext: ${question}`;
         const generatorResponse = await callFlowiseHttp(generatorUrl, { question: generatorQuestion }, config.flowiseToken, vars, `GENERATOR [${fileName}]`);
-        
-        // Извлекаем содержимое файла из ответа Generator Agent
-        // Generator вызывает write_project_file, который возвращает { success, action, path, content }
-        let fileContent = null;
-        let filePath = fileName;
-        
-        // Пытаемся извлечь из разных форматов ответа
-        if (typeof generatorResponse === 'string') {
-          try {
-            const parsed = JSON.parse(generatorResponse);
-            if (parsed.action === 'write_file' && parsed.content) {
-              fileContent = parsed.content;
-              filePath = parsed.path || fileName;
-            }
-          } catch {
-            // Если не JSON, возможно это просто содержимое файла
-            fileContent = generatorResponse;
-          }
-        } else if (generatorResponse?.action === 'write_file') {
-          fileContent = generatorResponse.content;
-          filePath = generatorResponse.path || fileName;
-        } else if (generatorResponse?.text) {
-          fileContent = generatorResponse.text;
-        } else if (generatorResponse?.content) {
-          fileContent = generatorResponse.content;
+
+        const extracted = extractGeneratorFilePayload(generatorResponse, fileName);
+        if (!extracted || typeof extracted.content !== 'string') {
+          throw new Error(
+            `Generator did not return file content for ${fileName}. ` +
+            'Expected write_project_file tool args (path + content), fenced code in the reply, or JSON action write_file.'
+          );
         }
-        
-        if (!fileContent) {
-          throw new Error(`Generator did not return file content for ${fileName}`);
-        }
-        
+
         const result = {
-          name: filePath,
-          content: fileContent
+          name: extracted.path || fileName,
+          content: extracted.content,
         };
         writtenFiles.push(result);
 
-        console.log(`[${getTimestamp()}] [GENERATOR] ✓ Файл сгенерирован: ${filePath} (${fileContent.length} байт)`);
+        console.log(`[${getTimestamp()}] [GENERATOR] ✓ Файл сгенерирован: ${result.name} (${result.content.length} байт)`);
         sendEvent(res, { type: 'file_done', name: result.name, content: result.content });
       } catch (err) {
         console.error(`[${getTimestamp()}] [GENERATOR] ✗ Ошибка файла ${fileName}: ${err.message}`);

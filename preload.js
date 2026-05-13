@@ -57,3 +57,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteChat:       (chatId)                       => ipcRenderer.invoke('chats:delete',        { chatId }),
   saveMessage:      (chatId, role, content, files) => ipcRenderer.invoke('messages:save',       { chatId, role, content, files }),
 });
+
+contextBridge.exposeInMainWorld('orcheus', {
+  writeProjectFile: (payload) => ipcRenderer.invoke('project:write-file', payload),
+});

@@ -145,6 +145,7 @@ export class ChatPanel {
 
   _handleStreamEvent(event) {
     const chatId = this.state.getCurrentChatId();
+    console.log('[SSE]', event);
 
     switch (event.type) {
       case 'status': {
@@ -176,38 +177,36 @@ export class ChatPanel {
       }
 
       case 'file_done': {
-        // Записываем файл локально
-        if (event.name && event.content) {
-          const projectRoot = this.state.getSettings()?.projectRoot;
-          if (projectRoot) {
-            // Формируем полный путь к файлу
-            const path = require('path');
-            const fullPath = path.join(projectRoot, event.name);
-            
-            // Вызываем IPC для записи файла
-            window.api.writeFile(fullPath, event.content).then(result => {
-              if (result.ok) {
-                console.log(`[ChatPanel] Файл записан: ${event.name}`);
-              } else {
-                console.error(`[ChatPanel] Ошибка записи файла: ${result.error}`);
+        const filePath = event.path || event.name;
+        const content = event.content || '';
+        const projectRoot = this.state.getSettings()?.projectRoot;
+
+        console.log('[file_done received]', { filePath, projectRoot, size: content.length });
+        if (filePath && projectRoot && window.orcheus?.writeProjectFile) {
+          window.orcheus.writeProjectFile({ projectRoot, path: filePath, content })
+            .then((result) => {
+              if (!result?.ok) {
+                console.error('[ChatPanel] Ошибка project:write-file:', result?.error || 'Unknown error');
               }
-            }).catch(console.error);
-          }
+            })
+            .catch((err) => console.error('[ChatPanel] IPC write failed:', err));
+        } else {
+          console.error('[ChatPanel] Пропущена запись file_done: отсутствует path/projectRoot/orcheus bridge');
         }
         
         if (this._lastFileMessageEl) {
           const bubble = this._lastFileMessageEl.querySelector('.msg-bubble');
-          if (bubble) bubble.textContent = `✅ Файл \`${event.name}\` создан`;
+          if (bubble) bubble.textContent = `✅ Файл \`${filePath || 'unknown'}\` создан`;
 
           // Добавляем кликабельный chip
           const chips = document.createElement('div');
           chips.className = 'chips';
           const btn = document.createElement('button');
           btn.className = 'chip';
-          btn.textContent = `${fileIcon(event.name)} ${event.name}`;
-          btn.title = event.name;
+          btn.textContent = `${fileIcon(filePath || 'unknown')} ${filePath || 'unknown'}`;
+          btn.title = filePath || 'unknown';
           btn.addEventListener('click', () => {
-            window.dispatchEvent(new CustomEvent('open-file', { detail: event }));
+            window.dispatchEvent(new CustomEvent('open-file', { detail: { ...event, name: filePath } }));
           });
           chips.appendChild(btn);
           this._lastFileMessageEl.appendChild(chips);

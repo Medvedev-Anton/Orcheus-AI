@@ -3,7 +3,7 @@
  */
 
 const { ipcMain, shell, dialog } = require('electron');
-const { listDir, readFile, writeFile } = require('../services/files');
+const { listDir, readFile, writeFile, writeSingleFile } = require('../services/files');
 const { loadSettings } = require('../config/settings');
 
 let mainWindow = null;
@@ -37,6 +37,24 @@ function registerFileHandlers() {
   ipcMain.handle('files:write', async (_e, { filePath, content }) => {
     const { projectRoot } = loadSettings();
     return await writeFile(filePath, content, projectRoot);
+  });
+
+  ipcMain.handle('project:write-file', async (_e, payload = {}) => {
+    try {
+      const projectRoot = typeof payload.projectRoot === 'string' ? payload.projectRoot.trim() : '';
+      const filePath = typeof payload.path === 'string' ? payload.path.trim() : '';
+      const content = typeof payload.content === 'string' ? payload.content : '';
+
+      if (!projectRoot) return { ok: false, error: 'projectRoot is required' };
+      if (!filePath) return { ok: false, error: 'path is required' };
+
+      const written = await writeSingleFile(projectRoot, filePath, content);
+      console.log('[IPC file written]', written.fullPath);
+      return { ok: true, file: written };
+    } catch (err) {
+      console.error('[IPC file write error]', err.message);
+      return { ok: false, error: err.message };
+    }
   });
 
   ipcMain.handle('shell:open-folder', async () => {
