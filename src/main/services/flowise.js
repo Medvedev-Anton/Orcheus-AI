@@ -174,10 +174,11 @@ async function callFlowise(question, chatId, settings, progressCb) {
  * @param {string} question - Вопрос пользователя
  * @param {string} chatId - ID чата
  * @param {string} projectRoot - Папка проекта
+ * @param {string} projectFilesJson - JSON array string for Flowise $vars.projectFiles (from desktop listDir)
  * @param {function} onEvent - Callback для событий
  * @returns {{ cancel: function }}
  */
-function startGenerate(question, chatId, projectRoot, onEvent) {
+function startGenerate(question, chatId, projectRoot, projectFilesJson, onEvent) {
   const supabase = getSupabaseClient();
   let req = null;
   const startTime = Date.now();
@@ -189,7 +190,12 @@ function startGenerate(question, chatId, projectRoot, onEvent) {
     }
 
     const baseUrl = BACKEND_URL.replace(/\/+$/, '').replace('localhost', '127.0.0.1');
-    const params = new URLSearchParams({ question, chatId: chatId || '', projectRoot: projectRoot || '' });
+    const params = new URLSearchParams({
+      question,
+      chatId: chatId || '',
+      projectRoot: projectRoot || '',
+      projectFiles: projectFilesJson || '[]',
+    });
     let parsed;
     try {
       parsed = new URL(`${baseUrl}/api/generate/stream?${params}`);
@@ -206,6 +212,7 @@ function startGenerate(question, chatId, projectRoot, onEvent) {
     console.log(`[${getTimestamp()}] [CLIENT-SSE] URL: ${baseUrl}/api/generate/stream`);
     console.log(`[${getTimestamp()}] [CLIENT-SSE] Вопрос: ${question.slice(0, 100)}${question.length > 100 ? '...' : ''}`);
     console.log(`[${getTimestamp()}] [CLIENT-SSE] Project Root: ${projectRoot}`);
+    console.log(`[${getTimestamp()}] [CLIENT-SSE] projectFiles JSON length: ${(projectFilesJson || '[]').length}`);
     console.log(`${'='.repeat(80)}\n`);
 
     req = mod.request(

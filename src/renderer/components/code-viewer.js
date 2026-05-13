@@ -71,6 +71,10 @@ export class CodeViewer {
 
   async openFile(fullPath, name) {
     console.log('[CodeViewer] openFile:', fullPath, name);
+    if (!fullPath) {
+      this.elCodePre.textContent = 'Ошибка: не указан путь к файлу.';
+      return;
+    }
     if (this.state.isEditMode()) this.setEditMode(false);
     this.state.setCurrentFilePath(fullPath);
 

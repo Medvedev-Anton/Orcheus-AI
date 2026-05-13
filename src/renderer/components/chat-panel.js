@@ -5,6 +5,7 @@
 import { $ } from '../utils/dom.js';
 import { setStatus } from '../utils/dom.js';
 import { fileIcon } from '../../shared/utils.js';
+import { joinProjectPath } from '../utils/project-path.js';
 
 export class ChatPanel {
   constructor(appState) {
@@ -180,40 +181,64 @@ export class ChatPanel {
         const filePath = event.path || event.name;
         const content = event.content || '';
         const projectRoot = this.state.getSettings()?.projectRoot;
+        const pathRef = { fullPath: projectRoot && filePath ? joinProjectPath(projectRoot, filePath) : '' };
+        let chipBtn = null;
 
         console.log('[file_done received]', { filePath, projectRoot, size: content.length });
+
+        if (this._lastFileMessageEl) {
+          const bubble = this._lastFileMessageEl.querySelector('.msg-bubble');
+          if (bubble) bubble.textContent = `✅ Файл \`${filePath || 'unknown'}\` создан`;
+
+          const chips = document.createElement('div');
+          chips.className = 'chips';
+          chipBtn = document.createElement('button');
+          chipBtn.className = 'chip';
+          chipBtn.textContent = `${fileIcon(filePath || 'unknown')} ${filePath || 'unknown'}`;
+          chipBtn.title = filePath || 'unknown';
+          const waitForWrite = !!(filePath && projectRoot && window.orcheus?.writeProjectFile);
+          chipBtn.disabled = waitForWrite;
+
+          chipBtn.addEventListener('click', () => {
+            const fp = pathRef.fullPath;
+            if (!fp) {
+              console.error('[ChatPanel] open-file: fullPath missing (project root or path?)');
+              return;
+            }
+            window.dispatchEvent(new CustomEvent('open-file', {
+              detail: { fullPath: fp, name: filePath },
+            }));
+          });
+          chips.appendChild(chipBtn);
+          this._lastFileMessageEl.appendChild(chips);
+          this._lastFileMessageEl = null;
+        }
+        this.elMessages.scrollTop = this.elMessages.scrollHeight;
+
         if (filePath && projectRoot && window.orcheus?.writeProjectFile) {
           window.orcheus.writeProjectFile({ projectRoot, path: filePath, content })
             .then((result) => {
               if (!result?.ok) {
                 console.error('[ChatPanel] Ошибка project:write-file:', result?.error || 'Unknown error');
+                return;
               }
+              if (result.file?.fullPath) pathRef.fullPath = result.file.fullPath;
+              window.dispatchEvent(new CustomEvent('files-generated', {
+                detail: [{
+                  ...event,
+                  name: filePath,
+                  path: filePath,
+                  fullPath: pathRef.fullPath,
+                }],
+              }));
             })
-            .catch((err) => console.error('[ChatPanel] IPC write failed:', err));
+            .catch((err) => console.error('[ChatPanel] IPC write failed:', err))
+            .finally(() => {
+              if (chipBtn) chipBtn.disabled = false;
+            });
         } else {
           console.error('[ChatPanel] Пропущена запись file_done: отсутствует path/projectRoot/orcheus bridge');
         }
-        
-        if (this._lastFileMessageEl) {
-          const bubble = this._lastFileMessageEl.querySelector('.msg-bubble');
-          if (bubble) bubble.textContent = `✅ Файл \`${filePath || 'unknown'}\` создан`;
-
-          // Добавляем кликабельный chip
-          const chips = document.createElement('div');
-          chips.className = 'chips';
-          const btn = document.createElement('button');
-          btn.className = 'chip';
-          btn.textContent = `${fileIcon(filePath || 'unknown')} ${filePath || 'unknown'}`;
-          btn.title = filePath || 'unknown';
-          btn.addEventListener('click', () => {
-            window.dispatchEvent(new CustomEvent('open-file', { detail: { ...event, name: filePath } }));
-          });
-          chips.appendChild(btn);
-          this._lastFileMessageEl.appendChild(chips);
-          this._lastFileMessageEl = null;
-        }
-        this.elMessages.scrollTop = this.elMessages.scrollHeight;
-        window.dispatchEvent(new CustomEvent('files-generated', { detail: [event] }));
         break;
       }
 

@@ -5,12 +5,39 @@
 const { ipcMain } = require('electron');
 const { getUser } = require('../services/auth');
 const { callFlowise, extractFiles, startGenerate } = require('../services/flowise');
-const { writeProjectFiles } = require('../services/files');
+const { writeProjectFiles, listDir, flattenFileTreeForVars } = require('../services/files');
 const { loadSettings } = require('../config/settings');
 const http = require('http');
 const { BACKEND_URL } = require('../config/constants');
 
 let currentGeneration = null;
+
+const MAX_PROJECT_FILES_QUERY_CHARS = 12000;
+
+/**
+ * JSON array for Flowise overrideConfig.vars.projectFiles (desktop can see the disk; backend cannot).
+ */
+async function buildProjectFilesJson(projectRoot) {
+  if (!projectRoot || typeof projectRoot !== 'string') return '[]';
+  try {
+    const tree = await listDir(projectRoot, '');
+    const flat = flattenFileTreeForVars(tree);
+    let json = JSON.stringify(flat);
+    if (json.length > MAX_PROJECT_FILES_QUERY_CHARS) {
+      const n = flat.length;
+      let cut = flat;
+      while (cut.length > 50 && JSON.stringify(cut).length > MAX_PROJECT_FILES_QUERY_CHARS) {
+        cut = cut.slice(0, Math.floor(cut.length * 0.8));
+      }
+      json = JSON.stringify(cut);
+      console.warn(`[flowise:generate] projectFiles truncated (${cut.length}/${n} entries) for query size`);
+    }
+    return json;
+  } catch (err) {
+    console.warn('[flowise:generate] projectFiles list failed:', err.message);
+    return '[]';
+  }
+}
 
 /**
  * Регистрация IPC обработчиков для Flowise
@@ -54,7 +81,8 @@ function registerFlowiseHandlers() {
 
     const settings = loadSettings();
     const send = event.sender;
-    currentGeneration = startGenerate(question, chatId, settings.projectRoot, (sseEvent) => {
+    const projectFilesJson = await buildProjectFilesJson(settings.projectRoot);
+    currentGeneration = startGenerate(question, chatId, settings.projectRoot, projectFilesJson, (sseEvent) => {
       if (!send.isDestroyed()) {
         send.send('flowise:stream-event', sseEvent);
       }

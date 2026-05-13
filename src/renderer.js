@@ -13,6 +13,7 @@ import { ChatList } from './renderer/components/chat-list.js';
 import { FileTree } from './renderer/components/file-tree.js';
 import { CodeViewer } from './renderer/components/code-viewer.js';
 import { ResizablePanels } from './renderer/components/resizable-panels.js';
+import { joinProjectPath } from './renderer/utils/project-path.js';
 
 // Глобальное состояние
 const state = new AppState();
@@ -99,13 +100,25 @@ function _setupEventListeners() {
     await fileTree.refresh();
     if (e.detail.length > 0) {
       const first = e.detail[0];
-      await codeViewer.openFile(first.fullPath, first.name);
+      if (first.fullPath) {
+        await codeViewer.openFile(first.fullPath, first.name);
+      }
     }
   });
   
   window.addEventListener('open-file', (e) => {
     console.log('[Renderer] open-file event:', e.detail);
-    codeViewer.openFile(e.detail.fullPath, e.detail.name);
+    const d = e.detail || {};
+    let fullPath = d.fullPath;
+    const name = d.name;
+    if (!fullPath && (d.path || name) && state.getSettings()?.projectRoot) {
+      fullPath = joinProjectPath(state.getSettings().projectRoot, d.path || name);
+    }
+    if (!fullPath) {
+      console.warn('[Renderer] open-file: no path resolved', d);
+      return;
+    }
+    codeViewer.openFile(fullPath, name || fullPath);
   });
   
   // Чаты

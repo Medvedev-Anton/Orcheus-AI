@@ -88,7 +88,8 @@ function callFlowiseHttp(url, body, token, vars = {}, flowName = 'Unknown') {
       overrideConfig: {
         vars: {
           authToken: vars.authToken || '',
-          projectRoot: vars.projectRoot || ''
+          projectRoot: vars.projectRoot || '',
+          projectFiles: vars.projectFiles || '[]',
         }
       }
     };
@@ -512,6 +513,71 @@ function extractJsonFromMarkdown(text) {
 }
 
 /**
+ * Extract first balanced JSON value starting at openCh (handles prose before `[` or `{`).
+ */
+function extractFirstBalancedJson(text, openCh, closeCh) {
+  if (typeof text !== 'string') return null;
+  const start = text.indexOf(openCh);
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (c === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (c === '"' && !escape) {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (c === openCh) depth++;
+    else if (c === closeCh) {
+      depth--;
+      if (depth === 0) {
+        const slice = text.slice(start, i + 1);
+        try {
+          return JSON.parse(slice);
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Planner output: prose + JSON array, or fenced JSON, or { "files": [...] }.
+ */
+function extractPlanFilesFromText(text) {
+  if (typeof text !== 'string') return null;
+
+  const fromMd = extractJsonFromMarkdown(text);
+  let parsed = tryParseJson(fromMd);
+  if (parsed?.files && Array.isArray(parsed.files)) return parsed.files;
+  if (Array.isArray(parsed)) return parsed;
+
+  parsed = tryParseJson(text.trim());
+  if (parsed?.files && Array.isArray(parsed.files)) return parsed.files;
+  if (Array.isArray(parsed)) return parsed;
+
+  const fromArray = extractFirstBalancedJson(text, '[', ']');
+  if (Array.isArray(fromArray)) return fromArray;
+
+  const fromObj = extractFirstBalancedJson(text, '{', '}');
+  if (fromObj?.files && Array.isArray(fromObj.files)) return fromObj.files;
+
+  return null;
+}
+
+/**
  * Нормализует один элемент плана к { name, description, action }
  * Поддерживает разные варианты ключей от LLM
  */
@@ -547,24 +613,26 @@ function parsePlan(payload) {
   if (payload?.files && Array.isArray(payload.files)) {
     rawFiles = payload.files;
   }
-  // JSON-строка в поле text
+  // Текст: markdown, чистый JSON, или проза + массив [...]
   else if (typeof payload?.text === 'string') {
-    const extracted = extractJsonFromMarkdown(payload.text);
-    const parsed = tryParseJson(extracted);
-    if (parsed?.files && Array.isArray(parsed.files)) rawFiles = parsed.files;
-    else if (Array.isArray(parsed)) rawFiles = parsed;
+    rawFiles = extractPlanFilesFromText(payload.text);
   }
-  // JSON-строка в поле json
-  else if (payload?.json) {
+  // Поле json
+  else if (payload?.json != null) {
     const extracted = typeof payload.json === 'string' ? extractJsonFromMarkdown(payload.json) : payload.json;
-    const parsed = typeof extracted === 'string' ? tryParseJson(extracted) : extracted;
-    if (parsed?.files && Array.isArray(parsed.files)) rawFiles = parsed.files;
-    else if (Array.isArray(parsed)) rawFiles = parsed;
+    if (typeof extracted === 'string') {
+      rawFiles = extractPlanFilesFromText(extracted);
+    } else if (extracted?.files && Array.isArray(extracted.files)) {
+      rawFiles = extracted.files;
+    } else if (Array.isArray(extracted)) {
+      rawFiles = extracted;
+    }
   }
   // JSON-строка в поле files (строка)
   else if (typeof payload?.files === 'string') {
     const parsed = tryParseJson(payload.files);
     if (Array.isArray(parsed)) rawFiles = parsed;
+    else if (parsed?.files && Array.isArray(parsed.files)) rawFiles = parsed.files;
   }
 
   if (!rawFiles || rawFiles.length === 0) {
@@ -627,14 +695,20 @@ async function generateStreamHandler(req, res, next) {
       return res.end();
     }
 
+    const projectFiles =
+      typeof req.query.projectFiles === 'string' && req.query.projectFiles.trim()
+        ? req.query.projectFiles
+        : '[]';
+
     // Подготовка динамических переменных для Flowise
     const authToken = req.headers.authorization?.replace('Bearer ', '') || '';
     const vars = {
       authToken,
-      projectRoot
+      projectRoot,
+      projectFiles,
     };
 
-    console.log(`[${getTimestamp()}] [GENERATE] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot}`);
+    console.log(`[${getTimestamp()}] [GENERATE] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot}, projectFiles bytes=${projectFiles.length}`);
 
     // Этап 1: Планирование
     console.log(`\n[${getTimestamp()}] [PLANNER] 📋 Этап 1: Планирование проекта`);

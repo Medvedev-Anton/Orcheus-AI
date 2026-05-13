@@ -143,6 +143,30 @@ async function listDir(dirPath, relBase) {
 }
 
 /**
+ * Flatten file tree for Flowise $vars.projectFiles (JSON array of { path, type, name }).
+ * @param {Array} nodes - Output of listDir
+ * @returns {Array<{path: string, type: string, name: string}>}
+ */
+function flattenFileTreeForVars(nodes) {
+  const out = [];
+  if (!Array.isArray(nodes)) return out;
+  for (const node of nodes) {
+    if (!node || typeof node !== 'object') continue;
+    if (node.path) {
+      out.push({
+        path: node.path,
+        type: node.type === 'dir' ? 'dir' : 'file',
+        name: node.name || '',
+      });
+    }
+    if (node.type === 'dir' && Array.isArray(node.children)) {
+      out.push(...flattenFileTreeForVars(node.children));
+    }
+  }
+  return out;
+}
+
+/**
  * Чтение файла
  * @param {string} filePath - Путь к файлу
  * @returns {Promise<{ok: boolean, content?: string, error?: string}>}
@@ -183,6 +207,7 @@ module.exports = {
   writeProjectFiles,
   writeSingleFile,
   listDir,
+  flattenFileTreeForVars,
   readFile,
   writeFile,
 };
