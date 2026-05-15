@@ -91,6 +91,11 @@ function callFlowiseHttp(url, body, token, vars = {}, flowName = 'Unknown') {
           authToken: vars.authToken || '',
           projectRoot: vars.projectRoot || '',
           projectFiles: vars.projectFiles || '[]',
+        },
+        // ВАЖНО: Также передаём через state для доступа в Custom Tools
+        state: {
+          projectFiles: vars.projectFiles || '[]',
+          projectRoot: vars.projectRoot || '',
         }
       }
     };
