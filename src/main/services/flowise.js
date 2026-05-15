@@ -190,15 +190,16 @@ function startGenerate(question, chatId, projectRoot, projectFilesJson, onEvent)
     }
 
     const baseUrl = BACKEND_URL.replace(/\/+$/, '').replace('localhost', '127.0.0.1');
-    const params = new URLSearchParams({
+    const bodyObj = {
       question,
       chatId: chatId || '',
       projectRoot: projectRoot || '',
       projectFiles: projectFilesJson || '[]',
-    });
+    };
+    const bodyStr = JSON.stringify(bodyObj);
     let parsed;
     try {
-      parsed = new URL(`${baseUrl}/api/generate/stream?${params}`);
+      parsed = new URL(`${baseUrl}/api/generate/stream`);
     } catch (e) {
       onEvent({ type: 'error', message: 'Некорректный Backend URL: ' + e.message });
       return;
@@ -208,7 +209,7 @@ function startGenerate(question, chatId, projectRoot, projectFilesJson, onEvent)
     const mod = isHttps ? https : http;
 
     console.log(`\n${'='.repeat(80)}`);
-    console.log(`[${getTimestamp()}] [CLIENT-SSE] 🚀 Начало SSE-соединения`);
+    console.log(`[${getTimestamp()}] [CLIENT-SSE] 🚀 Начало SSE-соединения (POST)`);
     console.log(`[${getTimestamp()}] [CLIENT-SSE] URL: ${baseUrl}/api/generate/stream`);
     console.log(`[${getTimestamp()}] [CLIENT-SSE] Вопрос: ${question.slice(0, 100)}${question.length > 100 ? '...' : ''}`);
     console.log(`[${getTimestamp()}] [CLIENT-SSE] Project Root: ${projectRoot}`);
@@ -219,12 +220,14 @@ function startGenerate(question, chatId, projectRoot, projectFilesJson, onEvent)
       {
         hostname: parsed.hostname,
         port: parsed.port || (isHttps ? 443 : 80),
-        path: parsed.pathname + parsed.search,
-        method: 'GET',
+        path: parsed.pathname,
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Accept': 'text/event-stream',
           'Cache-Control': 'no-cache',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(bodyStr, 'utf8'),
         },
       },
       (res) => {
@@ -288,6 +291,7 @@ function startGenerate(question, chatId, projectRoot, projectFilesJson, onEvent)
       onEvent({ type: 'error', message: 'Ошибка соединения с сервером: ' + err.message });
     });
 
+    req.write(bodyStr);
     req.end();
   }).catch((err) => {
     console.error(`[${getTimestamp()}] [CLIENT-SSE] ✗ Ошибка авторизации: ${err.message}`);

@@ -1,6 +1,7 @@
 /**
- * GET /api/generate/stream endpoint
- * SSE-стриминг для пошаговой генерации файлов
+ * GET/POST /api/generate/stream endpoint
+ * SSE streaming for stepwise file generation.
+ * POST JSON body is preferred so projectFiles is not truncated by URL limits.
  */
 
 const http = require('http');
@@ -651,8 +652,7 @@ function parsePlan(payload) {
 }
 
 /**
- * GET /api/generate/stream
- * SSE-эндпоинт для потоковой генерации
+ * GET/POST /api/generate/stream — SSE stream
  */
 async function generateStreamHandler(req, res, next) {
   try {
@@ -675,9 +675,23 @@ async function generateStreamHandler(req, res, next) {
       return res.end();
     }
 
-    // Валидация параметров
-    const { question, chatId } = req.query;
-    if (!question || typeof question !== 'string' || !question.trim()) {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const question = String(body.question ?? req.query.question ?? '').trim();
+    const chatId = body.chatId ?? req.query.chatId ?? '';
+    const projectRoot = String(body.projectRoot ?? req.query.projectRoot ?? '').trim();
+
+    let projectFiles = '[]';
+    if (body.projectFiles != null) {
+      if (typeof body.projectFiles === 'string' && body.projectFiles.length > 0) {
+        projectFiles = body.projectFiles;
+      } else if (typeof body.projectFiles === 'object') {
+        projectFiles = JSON.stringify(body.projectFiles);
+      }
+    } else if (typeof req.query.projectFiles === 'string' && req.query.projectFiles.trim()) {
+      projectFiles = req.query.projectFiles;
+    }
+
+    if (!question) {
       sendEvent(res, { type: 'error', message: 'Пустой вопрос' });
       return res.end();
     }
@@ -686,19 +700,13 @@ async function generateStreamHandler(req, res, next) {
     console.log(`[${getTimestamp()}] [GENERATE] 🚀 Начало генерации проекта`);
     console.log(`[${getTimestamp()}] [GENERATE] User: ${req.user?.id || 'unknown'}`);
     console.log(`[${getTimestamp()}] [GENERATE] Запрос: ${question.slice(0, 100)}${question.length > 100 ? '...' : ''}`);
+    console.log(`[${getTimestamp()}] [GENERATE] Transport: ${req.method}, projectFiles source: ${body.projectFiles != null ? 'body' : (typeof req.query.projectFiles === 'string' && req.query.projectFiles.trim() ? 'query' : 'default')}`);
     console.log(`${'='.repeat(80)}\n`);
 
-    // projectRoot передаётся клиентом в query
-    const projectRoot = req.query.projectRoot;
-    if (!projectRoot || typeof projectRoot !== 'string' || !projectRoot.trim()) {
+    if (!projectRoot) {
       sendEvent(res, { type: 'error', message: 'Не указана папка проекта (projectRoot)' });
       return res.end();
     }
-
-    const projectFiles =
-      typeof req.query.projectFiles === 'string' && req.query.projectFiles.trim()
-        ? req.query.projectFiles
-        : '[]';
 
     // Подготовка динамических переменных для Flowise
     const authToken = req.headers.authorization?.replace('Bearer ', '') || '';

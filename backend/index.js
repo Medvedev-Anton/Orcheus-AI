@@ -79,7 +79,9 @@ app.use('/api', configRouter);
 
 // ─── Protected Routes ───
 app.post('/api/predict', authMiddleware, rateLimitMiddleware, predictHandler);
-app.get('/api/generate/stream', authMiddleware, rateLimitMiddleware, generateStreamHandler);
+const generateStreamStack = [authMiddleware, rateLimitMiddleware, generateStreamHandler];
+app.get('/api/generate/stream', ...generateStreamStack);
+app.post('/api/generate/stream', ...generateStreamStack);
 
 // ─── MCP Endpoints ───
 // Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7
