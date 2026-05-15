@@ -46,9 +46,24 @@ app.use(express.json({ limit: config.maxRequestSize }));
 // ─── Request Timeout ───
 // Requirements: 8.2
 app.use((req, res, next) => {
+  const isSseRequest =
+    req.path === '/api/generate/stream' ||
+    req.headers.accept?.includes('text/event-stream');
+
+  // SSE-потоки не обрабатываем глобальным JSON-timeout,
+  // потому что они могут быть долгими и уже отправляют headers.
+  if (isSseRequest) {
+    return next();
+  }
+
   res.setTimeout(config.requestTimeout, () => {
-    res.status(504).json({ error: 'Request timeout' });
+    console.warn(`[Timeout] ${req.method} ${req.originalUrl}`);
+
+    if (!res.headersSent && !res.writableEnded) {
+      return res.status(504).json({ error: 'Request timeout' });
+    }
   });
+
   next();
 });
 
