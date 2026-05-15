@@ -732,6 +732,17 @@ async function generateStreamHandler(req, res, next) {
     };
 
     console.log(`[${getTimestamp()}] [GENERATE] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot}, projectFiles bytes=${projectFiles.length}`);
+    
+    // Логирование содержимого projectFiles для отладки
+    try {
+      const parsed = JSON.parse(projectFiles);
+      console.log(`[${getTimestamp()}] [GENERATE] projectFiles parsed: ${Array.isArray(parsed) ? parsed.length : 'not array'} items`);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        console.log(`[${getTimestamp()}] [GENERATE] First 5 files:`, parsed.slice(0, 5).map(f => f.path || f.name || f));
+      }
+    } catch (e) {
+      console.error(`[${getTimestamp()}] [GENERATE] Failed to parse projectFiles:`, e.message);
+    }
 
     // Этап 1: Планирование
     console.log(`\n[${getTimestamp()}] [PLANNER] 📋 Этап 1: Планирование проекта`);

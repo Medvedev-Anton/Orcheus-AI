@@ -20,8 +20,12 @@ const MAX_PROJECT_FILES_QUERY_CHARS = 12000;
 async function buildProjectFilesJson(projectRoot) {
   if (!projectRoot || typeof projectRoot !== 'string') return '[]';
   try {
+    console.log(`[buildProjectFilesJson] Reading files from: ${projectRoot}`);
     const tree = await listDir(projectRoot, '');
+    console.log(`[buildProjectFilesJson] Tree nodes count: ${tree.length}`);
     const flat = flattenFileTreeForVars(tree);
+    console.log(`[buildProjectFilesJson] Flattened files count: ${flat.length}`);
+    console.log(`[buildProjectFilesJson] Files:`, flat.map(f => f.path).join(', '));
     let json = JSON.stringify(flat);
     if (json.length > MAX_PROJECT_FILES_QUERY_CHARS) {
       const n = flat.length;
@@ -32,6 +36,7 @@ async function buildProjectFilesJson(projectRoot) {
       json = JSON.stringify(cut);
       console.warn(`[flowise:generate] projectFiles truncated (${cut.length}/${n} entries) for query size`);
     }
+    console.log(`[buildProjectFilesJson] Final JSON length: ${json.length} chars`);
     return json;
   } catch (err) {
     console.warn('[flowise:generate] projectFiles list failed:', err.message);
