@@ -221,13 +221,28 @@ function parseWriteFileToolOutput(raw) {
     return null;
   }
   if (typeof raw !== 'string') return null;
+  
+  // Логирование для отладки
+  console.log(`[DEBUG] parseWriteFileToolOutput: raw type=${typeof raw}, length=${raw.length}, first 200 chars:`, raw.slice(0, 200));
+  
   const parsed = tryParseJson(raw.trim());
-  if (!parsed || typeof parsed !== 'object') return null;
-  if (typeof parsed.content !== 'string' || !parsed.content.length) return null;
-  if (typeof parsed.path !== 'string' || !parsed.path.trim()) return null;
+  if (!parsed || typeof parsed !== 'object') {
+    console.log(`[DEBUG] parseWriteFileToolOutput: JSON parse failed or not an object`);
+    return null;
+  }
+  if (typeof parsed.content !== 'string' || !parsed.content.length) {
+    console.log(`[DEBUG] parseWriteFileToolOutput: content is not a string or empty. content type=${typeof parsed.content}`);
+    return null;
+  }
+  if (typeof parsed.path !== 'string' || !parsed.path.trim()) {
+    console.log(`[DEBUG] parseWriteFileToolOutput: path is not a string or empty. path type=${typeof parsed.path}`);
+    return null;
+  }
   if (parsed.action === 'write_file' || parsed.success === true) {
+    console.log(`[DEBUG] parseWriteFileToolOutput: SUCCESS! Returning path=${parsed.path}, content length=${parsed.content.length}`);
     return { path: parsed.path, content: parsed.content };
   }
+  console.log(`[DEBUG] parseWriteFileToolOutput: action/success check failed. action=${parsed.action}, success=${parsed.success}`);
   return null;
 }
 
@@ -770,8 +785,16 @@ async function generateStreamHandler(req, res, next) {
         const generatorQuestion = `Action: ${action}\nFile: ${fileName}\nDescription: ${fileSpec.description || ''}\nContext: ${question}`;
         const generatorResponse = await callFlowiseHttp(generatorUrl, { question: generatorQuestion }, config.flowiseToken, vars, `GENERATOR [${fileName}]`);
 
+        // Детальное логирование для отладки
+        console.log(`[${getTimestamp()}] [GENERATOR] [DEBUG] Response structure:`, JSON.stringify(generatorResponse, null, 2).slice(0, 1000));
+
         const extracted = extractGeneratorFilePayload(generatorResponse, fileName);
         if (!extracted || typeof extracted.content !== 'string') {
+          // Дополнительная диагностика
+          console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] Extraction failed. Response keys:`, Object.keys(generatorResponse || {}));
+          console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] Response.text:`, typeof generatorResponse?.text === 'string' ? generatorResponse.text.slice(0, 200) : 'N/A');
+          console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] Response.usedTools:`, Array.isArray(generatorResponse?.usedTools) ? generatorResponse.usedTools.length : 'N/A');
+          
           throw new Error(
             `Generator did not return file content for ${fileName}. ` +
             'Expected write_project_file tool args (path + content), fenced code in the reply, or JSON action write_file.'
