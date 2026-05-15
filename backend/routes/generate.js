@@ -101,6 +101,11 @@ function callFlowiseHttp(url, body, token, vars = {}, flowName = 'Unknown') {
     };
 
     const bodyStr = JSON.stringify(flowisePayload);
+    
+    // Детальное логирование для отладки
+    console.log(`[${flowName}] Flowise payload keys:`, Object.keys(flowisePayload));
+    console.log(`[${flowName}] overrideConfig:`, JSON.stringify(flowisePayload.overrideConfig, null, 2));
+    
     const isHttps = parsed.protocol === 'https:';
     const mod = isHttps ? https : http;
 
