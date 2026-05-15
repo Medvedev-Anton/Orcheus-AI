@@ -374,7 +374,7 @@ function looksLikeNaturalLanguageSummary(s) {
   if (/^Файл\s*`/.test(t)) return true;
   if (/^The file\s+/i.test(t)) return true;
   if (/^Successfully\s+(created|written)/i.test(t)) return true;
-  if (/\*\*DOCTYPE\*\*/i.test(t)) return true;
+  // Removed problematic DOCTYPE check that was matching HTML code
   if (/минимальный\s+HTML/i.test(t)) return true;
   if (/следующей\s+структурой/i.test(t)) return true;
   return false;
