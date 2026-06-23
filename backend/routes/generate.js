@@ -694,8 +694,20 @@ async function generateStreamHandler(req, res, next) {
       console.log(`[${getTimestamp()}] [GENERATE] ⚠ Клиент отключился`);
     });
 
+    // ─── Keep-alive ping для предотвращения разрыва соединения DPI/прокси ───
+    // Отправляем пустой комментарий каждые 15 секунд
+    // Это стандартное решение для SSE за корпоративными прокси и в сетях с DPI
+    const keepAliveInterval = setInterval(() => {
+      if (aborted || res.writableEnded) {
+        clearInterval(keepAliveInterval);
+        return;
+      }
+      res.write(': keep-alive\n\n');
+    }, 15000);
+
     // Проверка конфигурации
     if (!isStreamingConfigured) {
+      clearInterval(keepAliveInterval);
       sendEvent(res, { type: 'error', message: 'Streaming generation is not configured' });
       return res.end();
     }
@@ -717,6 +729,7 @@ async function generateStreamHandler(req, res, next) {
     }
 
     if (!question) {
+      clearInterval(keepAliveInterval);
       sendEvent(res, { type: 'error', message: 'Пустой вопрос' });
       return res.end();
     }
@@ -735,10 +748,25 @@ async function generateStreamHandler(req, res, next) {
 
     // Подготовка динамических переменных для Flowise
     const authToken = req.headers.authorization?.replace('Bearer ', '') || '';
+    
+    // Парсим projectFiles для добавления в system prompt
+    let projectFilesList = '';
+    try {
+      const parsed = JSON.parse(projectFiles);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        projectFilesList = '\n\n=== EXISTING PROJECT FILES ===\n' + 
+          parsed.map(f => `${f.path} (${f.type})`).join('\n') +
+          '\n=== END OF PROJECT FILES ===\n';
+      }
+    } catch (e) {
+      console.warn(`[${getTimestamp()}] [GENERATE] Failed to parse projectFiles for system prompt`);
+    }
+    
     const vars = {
       authToken,
       projectRoot,
       projectFiles,
+      projectFilesList, // Добавляем список файлов для system prompt
     };
 
     console.log(`[${getTimestamp()}] [GENERATE] Variables: authToken=${authToken ? 'set' : 'missing'}, projectRoot=${projectRoot}, projectFiles bytes=${projectFiles.length}`);
@@ -846,9 +874,11 @@ async function generateStreamHandler(req, res, next) {
       sendEvent(res, { type: 'done', files: writtenFiles, tokenUsage: usage });
     }
 
+    clearInterval(keepAliveInterval);
     res.end();
   } catch (err) {
     console.error('[Generate] Unexpected error:', err);
+    clearInterval(keepAliveInterval);
     if (!res.headersSent) {
       next(err);
     } else {
