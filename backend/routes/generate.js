@@ -190,7 +190,15 @@ function flattenUsedTools(root) {
     if (seen.has(obj)) return;
     seen.add(obj);
     if (Array.isArray(obj.usedTools)) out.push(...obj.usedTools);
+    else if (typeof obj.usedTools === 'string' && obj.usedTools.trim()) {
+      const parsed = tryParseJson(obj.usedTools);
+      if (Array.isArray(parsed)) out.push(...parsed);
+    }
     if (Array.isArray(obj.used_tools)) out.push(...obj.used_tools);
+    else if (typeof obj.used_tools === 'string' && obj.used_tools.trim()) {
+      const parsed = tryParseJson(obj.used_tools);
+      if (Array.isArray(parsed)) out.push(...parsed);
+    }
     if (Array.isArray(obj)) {
       for (const item of obj) walk(item, depth + 1);
     } else {
@@ -202,6 +210,142 @@ function flattenUsedTools(root) {
   }
   walk(root, 0);
   return out;
+}
+
+/**
+ * Flowise AgentFlow v2 keeps usedTools inside agentFlowExecutedData[].data.output,
+ * not at the top level of the prediction response.
+ */
+function collectUsedToolsFromResponse(generatorResponse) {
+  const out = [];
+  const pushAll = (items) => {
+    if (Array.isArray(items)) out.push(...items);
+  };
+
+  pushAll(generatorResponse?.usedTools);
+  pushAll(tryParseJson(generatorResponse?.usedTools));
+
+  const execData = generatorResponse?.agentFlowExecutedData;
+  if (Array.isArray(execData)) {
+    for (const node of execData) {
+      const output = node?.data?.output;
+      if (!output || typeof output !== 'object') continue;
+      pushAll(output.usedTools);
+      pushAll(tryParseJson(output.usedTools));
+      pushAll(output.used_tools);
+      pushAll(tryParseJson(output.used_tools));
+    }
+  }
+
+  pushAll(flattenUsedTools(generatorResponse));
+  return out;
+}
+
+function extractWriteEntryFromTool(tool, expectedFileName) {
+  const toolName = String(tool?.tool || tool?.name || '').toLowerCase();
+  const fromOut = parseWriteFileToolOutput(tool?.toolOutput ?? tool?.tool_output);
+  const inputs = getToolInputs(tool);
+
+  let fromInput = null;
+  if (inputs && typeof inputs === 'object') {
+    const p = inputs.path || inputs.filePath || inputs.file;
+    const c = inputs.content;
+    if (typeof p === 'string' && p.trim() && typeof c === 'string' && c.length) {
+      fromInput = { path: p, content: c };
+    }
+  }
+
+  const safeExpected = expectedFileName ? sanitizeName(expectedFileName) : '';
+
+  if (fromOut && fromInput && pathsRoughlyMatch(fromOut.path, fromInput.path)) {
+    return { path: fromInput.path, content: fromOut.content };
+  }
+  if (fromOut && (!safeExpected || pathsRoughlyMatch(fromOut.path, safeExpected))) {
+    return fromOut;
+  }
+  if (fromInput && (!safeExpected || pathsRoughlyMatch(fromInput.path, safeExpected))) {
+    return fromInput;
+  }
+  if (fromOut && (toolName.includes('write') || toolName.includes('project'))) {
+    return fromOut;
+  }
+  if (fromInput && (toolName.includes('write') || toolName.includes('project'))) {
+    return fromInput;
+  }
+  return null;
+}
+
+function extractFromToolRoleMessages(generatorResponse) {
+  const results = [];
+  const seen = new WeakSet();
+  function walk(obj, depth) {
+    if (depth > 25 || obj == null || typeof obj !== 'object') return;
+    if (seen.has(obj)) return;
+    seen.add(obj);
+
+    if (obj.role === 'tool') {
+      const toolName = String(obj.name || obj.tool || '').toLowerCase();
+      if (toolName.includes('write') || toolName.includes('project')) {
+        const parsed = parseWriteFileToolOutput(obj.content ?? obj.toolOutput ?? obj.tool_output);
+        if (parsed) results.push(parsed);
+      }
+    }
+
+    if (Array.isArray(obj)) {
+      for (const item of obj) walk(item, depth + 1);
+    } else {
+      for (const k of Object.keys(obj)) walk(obj[k], depth + 1);
+    }
+  }
+  walk(generatorResponse, 0);
+  return results;
+}
+
+function collectAllWriteFilePayloads(generatorResponse) {
+  const results = [];
+  const seenPaths = new Set();
+
+  function add(entry) {
+    if (!entry || typeof entry.content !== 'string' || !entry.content.length) return;
+    if (typeof entry.path !== 'string' || !entry.path.trim()) return;
+    const key = normalizePathForCompare(entry.path);
+    if (!key || seenPaths.has(key)) return;
+    seenPaths.add(key);
+    results.push({ path: sanitizeName(entry.path), content: entry.content });
+  }
+
+  for (const tool of collectUsedToolsFromResponse(generatorResponse)) {
+    add(extractWriteEntryFromTool(tool));
+  }
+
+  for (const msg of extractFromToolRoleMessages(generatorResponse)) {
+    add(msg);
+  }
+
+  const seenDeep = new WeakSet();
+  function walkWritePayloads(obj, depth) {
+    if (depth > 25 || obj == null || typeof obj !== 'object') return;
+    if (seenDeep.has(obj)) return;
+    seenDeep.add(obj);
+
+    if (
+      typeof obj.path === 'string'
+      && typeof obj.content === 'string'
+      && obj.content.length
+      && (obj.action === 'write_file' || obj.success === true)
+    ) {
+      add({ path: obj.path, content: obj.content });
+    }
+
+    if (Array.isArray(obj)) {
+      for (const item of obj) walkWritePayloads(item, depth + 1);
+    } else {
+      for (const k of Object.keys(obj)) walkWritePayloads(obj[k], depth + 1);
+    }
+  }
+  walkWritePayloads(generatorResponse, 0);
+
+  return results;
 }
 
 function getToolInputs(tool) {
@@ -260,37 +404,13 @@ function parseWriteFileToolOutput(raw) {
  * Flowise returns agent prose in `text` but real code in tool records (toolInput / toolOutput).
  */
 function extractFromUsedTools(generatorResponse, expectedFileName) {
-  const tools = flattenUsedTools(generatorResponse);
+  const tools = collectUsedToolsFromResponse(generatorResponse);
   const safeExpected = sanitizeName(expectedFileName);
   const pathMatches = [];
   const writeLike = [];
   for (const tool of tools) {
     const toolName = String(tool.tool || tool.name || '').toLowerCase();
-    const fromOut = parseWriteFileToolOutput(tool.toolOutput ?? tool.tool_output);
-    const inputs = getToolInputs(tool);
-
-    let fromInput = null;
-    if (inputs && typeof inputs === 'object') {
-      const p = inputs.path || inputs.filePath || inputs.file;
-      const c = inputs.content;
-      if (typeof p === 'string' && p.trim() && typeof c === 'string' && c.length) {
-        fromInput = { path: p, content: c };
-      }
-    }
-
-    let entry = null;
-    if (fromOut && fromInput && pathsRoughlyMatch(fromOut.path, fromInput.path)) {
-      entry = { path: fromInput.path, content: fromOut.content };
-    } else if (fromOut && pathsRoughlyMatch(fromOut.path, safeExpected)) {
-      entry = fromOut;
-    } else if (fromInput && pathsRoughlyMatch(fromInput.path, safeExpected)) {
-      entry = fromInput;
-    } else if (fromOut && (toolName.includes('write') || toolName.includes('project'))) {
-      entry = fromOut;
-    } else if (fromInput && (toolName.includes('write') || toolName.includes('project'))) {
-      entry = fromInput;
-    }
-
+    const entry = extractWriteEntryFromTool(tool, safeExpected);
     if (!entry) continue;
 
     if (pathsRoughlyMatch(entry.path, safeExpected)) pathMatches.push(entry);
@@ -440,6 +560,15 @@ function extractGeneratorFilePayload(generatorResponse, expectedFileName) {
   }
 
   if (!generatorResponse || typeof generatorResponse !== 'object') return null;
+
+  const payloadsFromTools = collectAllWriteFilePayloads(generatorResponse);
+  const payloadMatch = payloadsFromTools.find((p) => pathsRoughlyMatch(p.path, safeExpected));
+  if (payloadMatch) {
+    return { path: payloadMatch.path, content: payloadMatch.content };
+  }
+  if (payloadsFromTools.length === 1 && !safeExpected) {
+    return payloadsFromTools[0];
+  }
 
   if (
     typeof generatorResponse.content === 'string'
@@ -816,6 +945,28 @@ async function generateStreamHandler(req, res, next) {
     console.log(`\n[${getTimestamp()}] [GENERATOR] 📝 Этап 2: Генерация файлов (${plan.length} шт.)`);
     const generatorUrl = `${baseUrl}/api/v1/prediction/${config.generatorFlowId}`;
     const writtenFiles = [];
+    const writtenNames = new Set();
+
+    function isFileAlreadyWritten(fileName) {
+      return writtenNames.has(normalizePathForCompare(sanitizeName(fileName)));
+    }
+
+    function recordWrittenFile(result) {
+      const name = sanitizeName(result.name);
+      const key = normalizePathForCompare(name);
+      if (writtenNames.has(key)) return false;
+      writtenNames.add(key);
+      writtenFiles.push({ name, content: result.content });
+      console.log(`[${getTimestamp()}] [GENERATOR] ✓ Файл сгенерирован: ${name} (${result.content.length} байт)`);
+      sendEvent(res, { type: 'file_done', name, content: result.content });
+      return true;
+    }
+
+    function payloadsForPlan(payloads) {
+      return payloads.filter((payload) =>
+        plan.some((spec) => pathsRoughlyMatch(spec.name, payload.path))
+      );
+    }
 
     for (let i = 0; i < plan.length; i++) {
       const fileSpec = plan[i];
@@ -826,42 +977,80 @@ async function generateStreamHandler(req, res, next) {
 
       const fileName = sanitizeName(fileSpec.name);
       const action = fileSpec.action || 'create';
+
+      if (isFileAlreadyWritten(fileName)) {
+        console.log(`[${getTimestamp()}] [GENERATOR] ↷ Пропуск ${fileName} — уже создан ранее`);
+        continue;
+      }
+
       console.log(`\n[${getTimestamp()}] [GENERATOR] 📄 Файл ${i + 1}/${plan.length}: ${fileName} (${action})`);
       sendEvent(res, { type: 'file_start', name: fileName, action });
 
       try {
-        // Генерация файла с указанием action
         const generatorQuestion = `Action: ${action}\nFile: ${fileName}\nDescription: ${fileSpec.description || ''}\nContext: ${question}`;
-        const generatorResponse = await callFlowiseHttp(generatorUrl, { question: generatorQuestion }, config.flowiseToken, vars, `GENERATOR [${fileName}]`);
+        let generatorResponse = await callFlowiseHttp(
+          generatorUrl,
+          { question: generatorQuestion },
+          config.flowiseToken,
+          vars,
+          `GENERATOR [${fileName}]`
+        );
 
-        // Детальное логирование для отладки
         console.log(`[${getTimestamp()}] [GENERATOR] [DEBUG] Response structure:`, JSON.stringify(generatorResponse, null, 2).slice(0, 1000));
 
-        const extracted = extractGeneratorFilePayload(generatorResponse, fileName);
-        if (!extracted || typeof extracted.content !== 'string') {
-          // Дополнительная диагностика
+        let allPayloads = collectAllWriteFilePayloads(generatorResponse);
+        let planPayloads = payloadsForPlan(allPayloads);
+        let currentPayload = planPayloads.find((p) => pathsRoughlyMatch(p.path, fileName))
+          || extractGeneratorFilePayload(generatorResponse, fileName);
+
+        if (!currentPayload && action === 'create') {
+          const retryQuestion =
+            `CRITICAL: Action is CREATE for a NEW file "${fileName}". ` +
+            'The file does NOT exist yet — do NOT call read_project_file. ' +
+            `Generate full content and call write_project_file(path="${fileName}", content=...) immediately.\n\n` +
+            generatorQuestion;
+          console.log(`[${getTimestamp()}] [GENERATOR] ↻ Повтор для ${fileName} (create без write_project_file)`);
+          generatorResponse = await callFlowiseHttp(
+            generatorUrl,
+            { question: retryQuestion },
+            config.flowiseToken,
+            vars,
+            `GENERATOR [${fileName}] retry`
+          );
+          allPayloads = collectAllWriteFilePayloads(generatorResponse);
+          planPayloads = payloadsForPlan(allPayloads);
+          currentPayload = planPayloads.find((p) => pathsRoughlyMatch(p.path, fileName))
+            || extractGeneratorFilePayload(generatorResponse, fileName);
+        }
+
+        if (!currentPayload || typeof currentPayload.content !== 'string') {
           console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] Extraction failed. Response keys:`, Object.keys(generatorResponse || {}));
           console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] Response.text:`, typeof generatorResponse?.text === 'string' ? generatorResponse.text.slice(0, 200) : 'N/A');
-          console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] Response.usedTools:`, Array.isArray(generatorResponse?.usedTools) ? generatorResponse.usedTools.length : 'N/A');
-          
+          const execData = generatorResponse?.agentFlowExecutedData;
+          const lastOutput = Array.isArray(execData) ? execData[execData.length - 1]?.data?.output : null;
+          const usedToolsCount = collectUsedToolsFromResponse(generatorResponse).length;
+          console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] agentFlowExecutedData nodes:`, Array.isArray(execData) ? execData.length : 'N/A');
+          console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] last node usedTools:`, Array.isArray(lastOutput?.usedTools) ? lastOutput.usedTools.length : (lastOutput?.usedTools ? 'string' : 'N/A'));
+          console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] collected usedTools:`, usedToolsCount);
+          console.error(`[${getTimestamp()}] [GENERATOR] [DEBUG] write payloads found:`, allPayloads.map((p) => p.path).join(', ') || 'none');
+
           throw new Error(
             `Generator did not return file content for ${fileName}. ` +
             'Expected write_project_file tool args (path + content), fenced code in the reply, or JSON action write_file.'
           );
         }
 
-        const result = {
-          name: extracted.path || fileName,
-          content: extracted.content,
-        };
-        writtenFiles.push(result);
+        for (const payload of planPayloads) {
+          if (isFileAlreadyWritten(payload.path)) continue;
+          recordWrittenFile({ name: payload.path, content: payload.content });
+        }
 
-        console.log(`[${getTimestamp()}] [GENERATOR] ✓ Файл сгенерирован: ${result.name} (${result.content.length} байт)`);
-        sendEvent(res, { type: 'file_done', name: result.name, content: result.content });
+        if (!isFileAlreadyWritten(fileName)) {
+          recordWrittenFile({ name: currentPayload.path || fileName, content: currentPayload.content });
+        }
       } catch (err) {
         console.error(`[${getTimestamp()}] [GENERATOR] ✗ Ошибка файла ${fileName}: ${err.message}`);
         sendEvent(res, { type: 'error', message: `Ошибка файла ${fileName}: ${err.message}` });
-        // Продолжаем генерацию следующих файлов
       }
     }
 
