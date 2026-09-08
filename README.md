@@ -12,6 +12,12 @@ The project was developed as my final capstone project for the **Information Sys
 
 ---
 
+## Screenshot
+
+![Orcheus AI desktop interface](docs/images/orcheus-main.png)
+
+---
+
 ## Highlights
 
 - **Desktop AI assistant** built with Electron
