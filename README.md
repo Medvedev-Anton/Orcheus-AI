@@ -1,441 +1,226 @@
 # Orcheus AI
 
-Десктопный AI-ассистент для генерации проектов через [Flowise](https://flowiseai.com).  
-Вводите запрос в чат — приложение обращается к вашему Flowise-flow, получает файлы и записывает их на диск.
+**Desktop AI coding assistant powered by Flowise**
 
-![Electron](https://img.shields.io/badge/Electron-28-47848F?logo=electron) ![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=nodedotjs) ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows) ![Supabase](https://img.shields.io/badge/Supabase-Auth-3ECF8E?logo=supabase)
+[Русская версия / Russian documentation](README.ru.md)
 
-> Ранее: Flowise IDE
+Orcheus AI is a desktop application that connects a local development environment with AI workflows running in Flowise.
 
----
+The application allows a user to chat with an AI agent, generate project files, browse the generated file tree, inspect source code, and let the AI incrementally read, search, create, modify, and delete project files through MCP-style filesystem tools.
 
-## Возможности
-
-- **Авторизация / регистрация** — вход через Supabase, без аккаунта отправка запросов недоступна
-- **Чат с AI** — диалог с Flowise-агентом, анимация ожидания, прогресс-сообщения в реальном времени
-- **Генерация файлов** — ответ AI автоматически разбирается на файлы и записывается в папку проекта
-- **Дерево файлов** — левая панель с иерархией, сворачиваемыми папками, иконками по типу файла
-- **Просмотр кода** — правая панель с нумерацией строк и кнопкой «Копировать»
-- **Настройки через GUI** — папка проекта, тема оформления
-- **Новый чат** — сброс контекста диалога
-- **Открыть в проводнике** — быстрый доступ к папке проекта
-- **Безопасность** — токен Flowise скрыт на сервере, недоступен клиенту
+The project was developed as my final capstone project for the **Information Systems and Programming** program in 2026.
 
 ---
 
-## Требования
+## Highlights
 
-- [Node.js](https://nodejs.org) 18 или новее
+- **Desktop AI assistant** built with Electron
+- **Flowise integration** for AI workflows
+- **Supabase authentication** with JWT validation
+- **Node.js / Express backend proxy**
+- **MCP file tools** for AI-assisted project editing
+- **SSE streaming** for real-time progress updates
+- **Rate limiting** and backend request validation
+- **Protected Flowise credentials** — secret tokens stay on the server
+- Built-in **file tree and source code viewer**
+- Project files can be generated and modified directly from the AI workflow
 
 ---
 
-## Установка и запуск
+## Architecture
 
-### 1. Установка зависимостей
+```mermaid
+flowchart LR
+    A[Electron Desktop Client]
+    B[Node.js / Express Backend]
+    C[Supabase Auth]
+    D[Flowise AI Workflow]
+    E[MCP File Tools]
+    F[Local Project Files]
 
-```powershell
+    A --> B
+    A --> C
+    B --> C
+    B --> D
+    D --> E
+    E --> F
+```
+
+The Electron client communicates with a separate backend instead of connecting to Flowise directly.
+
+This keeps Flowise credentials on the server and allows the backend to handle authentication, rate limiting, request validation, and MCP filesystem operations.
+
+---
+
+## Tech Stack
+
+### Desktop
+- Electron
+- JavaScript
+- HTML / CSS
+
+### Backend
+- Node.js
+- Express
+- Supabase
+- JWT authentication
+
+### AI & Automation
+- Flowise
+- LLM APIs
+- MCP-style filesystem tools
+- Server-Sent Events (SSE)
+
+---
+
+## Main Features
+
+### AI Chat
+
+Users can send requests to a Flowise-powered AI workflow directly from the desktop application.
+
+The application displays progress updates and generated results in the interface.
+
+### Project File Generation
+
+AI responses can be converted into project files and written to a selected local project directory.
+
+### File Browser
+
+The desktop UI provides:
+
+- hierarchical file tree
+- collapsible folders
+- file-type icons
+- source code preview
+- copy-to-clipboard functionality
+
+### MCP File Operations
+
+The backend exposes authenticated filesystem operations that allow the AI workflow to work with an existing project incrementally.
+
+Supported operations include:
+
+- list files
+- read files
+- write files
+- search inside files
+- delete files
+
+### Authentication
+
+Users authenticate through Supabase.
+
+The backend validates Supabase JWT tokens before allowing access to protected AI and filesystem operations.
+
+### Security
+
+The project includes several security measures:
+
+- Flowise secret token stored only on the backend
+- JWT authentication
+- request rate limiting
+- path traversal protection
+- project-root validation
+- file-size limits
+- Electron `contextBridge` isolation
+
+---
+
+## Project Structure
+
+```text
+orcheus-ai/
+├── backend/              # Express backend and API
+├── Flowise/              # Flowise-related project resources
+├── src/
+│   ├── main/             # Electron main-process modules
+│   ├── renderer/         # UI components and application state
+│   └── shared/           # Shared utilities
+├── supabase/             # Supabase-related resources
+├── main.js
+├── preload.js
+├── flowise-save.mjs
+├── schema.sql
+└── package.json
+```
+
+---
+
+## Getting Started
+
+### Requirements
+
+- Node.js 18+
+- Supabase project
+- Flowise instance and workflow
+
+### Install dependencies
+
+```bash
 npm install
 ```
 
-### 2. Настройка backend сервера
+### Configure the backend
 
-Создайте файл `backend/.env`:
+Create `backend/.env`:
 
-```bash
-# Flowise
+```env
 FLOWISE_URL=https://your-flowise-server.com
 FLOWISE_TOKEN=your-secret-token
 FLOW_ID=your-flow-id
 
-# Supabase (для проверки JWT)
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=eyJ...
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
 
-# Server
 PORT=3001
 ```
 
-### 3. Запуск
+### Start the backend
 
-**Терминал 1 — Backend сервер:**
-```powershell
+```bash
 cd backend
 node index.js
 ```
 
-**Терминал 2 — Electron приложение:**
-```powershell
+### Start the Electron application
+
+```bash
 npm start
 ```
 
 ---
 
-## Первый запуск
+## Build for Windows
 
-### 1. Авторизация
-
-При запуске появится окно входа/регистрации.
-
-| Действие | Описание |
-|---|---|
-| **Войти** | введите email и пароль существующего аккаунта |
-| **Регистрация** | перейдите на вкладку «Регистрация», укажите email и пароль (мин. 6 символов) |
-
-Сессия сохраняется между запусками — входить каждый раз не нужно.
-
-### 2. Начало работы
-
-1. Введите запрос в чат и нажмите **Отправить** или `Ctrl+Enter`
-2. AI сгенерирует файлы и сохранит их в папку проекта
-3. Используйте **⚙️** для изменения папки проекта
-
-Настройки сохраняются в `%APPDATA%\orcheus-ai\orcheus-ai-settings.json`.
-
----
-
-## Горячие клавиши
-
-| Действие | Клавиши |
-|---|---|
-| Отправить сообщение | `Ctrl + Enter` |
-| Закрыть настройки | `Escape` |
-
----
-
-## Структура проекта
-
-```
-orcheus-ai/
-├── backend/                  # 🆕 Прокси-сервер (скрывает токен Flowise)
-│   ├── index.js              # Express сервер на порту 3001
-│   ├── config.js             # Загрузка переменных окружения
-│   ├── .env                  # Секреты: FLOWISE_TOKEN, FLOW_ID
-│   ├── routes/
-│   │   └── predict.js        # POST /api/predict — прокси к Flowise
-│   └── middleware/
-│       ├── auth.js           # Проверка Supabase JWT
-│       ├── rateLimit.js      # Ограничение 60 req/min
-│       └── errorHandler.js   # Обработка ошибок
-│
-├── main.js                   # Точка входа главного процесса
-├── preload.js                # contextBridge — безопасный мост main ↔ renderer
-├── flowise-save.mjs          # CLI-скрипт (работает независимо)
-├── .env                      # Supabase ключи (публичные)
-├── .env.example              # Шаблон переменных окружения
-├── package.json
-│
-└── src/
-    ├── index.html            # Разметка интерфейса
-    ├── styles.css            # Тёмная тема
-    ├── renderer.js           # Точка входа UI
-    │
-    ├── main/                 # Модули главного процесса (Node.js)
-    │   ├── config/
-    │   │   ├── constants.js  # Константы: SUPABASE_URL, BACKEND_URL
-    │   │   └── settings.js   # Управление настройками
-    │   ├── services/
-    │   │   ├── auth.js       # Авторизация Supabase
-    │   │   ├── flowise.js    # Запросы к backend (прокси)
-    │   │   ├── files.js      # Работа с файлами
-    │   │   ├── chat.js       # Управление чатами
-    │   │   └── formatter.js  # Форматирование кода
-    │   ├── ipc/
-    │   │   ├── auth-handlers.js
-    │   │   ├── flowise-handlers.js
-    │   │   ├── file-handlers.js
-    │   │   ├── chat-handlers.js
-    │   │   └── settings-handlers.js
-    │   └── window.js         # Создание окна
-    │
-    ├── renderer/             # Модули UI (браузер)
-    │   ├── components/
-    │   │   ├── auth-modal.js
-    │   │   ├── chat-panel.js
-    │   │   ├── chat-list.js
-    │   │   ├── file-tree.js
-    │   │   ├── code-viewer.js
-    │   │   ├── settings-modal.js
-    │   │   └── resizable-panels.js
-    │   ├── utils/
-    │   │   ├── dom.js
-    │   │   └── format.js
-    │   └── state/
-    │       └── app-state.js
-    │
-    └── shared/
-        └── utils.js
-```
-
----
-
----
-
-## CLI-режим (без GUI)
-
-Оригинальный скрипт `flowise-save.mjs` работает независимо:
-
-```powershell
-$env:FLOWISE_TOKEN="ваш_токен"
-$env:FLOWISE_URL="http://localhost:3000"
-$env:FLOW_ID="ваш_flow_id"
-$env:PROJECT_ROOT="./project"
-
-node flowise-save.mjs from-flowise "создай на React лендинг страницу автосалона"
-node flowise-save.mjs from-json ./result.json
-```
-
----
-
-## API Endpoints (Backend)
-
-### Standard Endpoints
-
-| Endpoint | Method | Описание |
-|----------|--------|----------|
-| `/health` | GET | Проверка состояния сервера |
-| `/api/predict` | POST | Проксирование запроса к Flowise |
-
-**POST /api/predict:**
-```json
-{
-  "question": "создай React приложение",
-  "chatId": "optional-chat-id"
-}
-```
-
-Headers:
-- `Authorization: Bearer <Supabase_JWT>`
-
-### MCP Endpoints (Model Context Protocol)
-
-MCP интеграция позволяет Flowise AI-агентам работать с файлами проекта инкрементально. Все MCP endpoints требуют аутентификации и используют единый формат запросов/ответов.
-
-**Общие требования:**
-- Аутентификация: `Authorization: Bearer <Supabase_JWT>`
-- Корень проекта: `X-Project-Root: <encoded_path>` (URL-encoded абсолютный путь)
-- Content-Type: `application/json`
-- Rate limit: 60 запросов/минуту
-- Timeout: 30 секунд на операцию
-
-#### POST /mcp/list_files
-Список файлов и директорий в проекте.
-
-**Запрос:**
-```json
-{
-  "parameters": {
-    "path": ".",
-    "recursive": false
-  }
-}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "files": [
-      {
-        "type": "dir",
-        "name": "src",
-        "path": "src",
-        "fullPath": "/absolute/path/to/src"
-      },
-      {
-        "type": "file",
-        "name": "index.html",
-        "path": "index.html",
-        "fullPath": "/absolute/path/to/index.html"
-      }
-    ]
-  }
-}
-```
-
-**Ограничения:**
-- Максимальная глубина рекурсии: 10 уровней
-- Скрытые файлы (начинающиеся с `.`) пропускаются
-- Папки `node_modules`, `.git`, `.next`, `dist` пропускаются
-
-#### POST /mcp/read_file
-Чтение содержимого файла.
-
-**Запрос:**
-```json
-{
-  "parameters": {
-    "path": "src/index.js"
-  }
-}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "content": "console.log('Hello World');",
-    "path": "src/index.js"
-  }
-}
-```
-
-**Ограничения:**
-- Максимальный размер файла: 10 МБ
-- Кодировка: UTF-8
-
-#### POST /mcp/write_file
-Создание или перезапись файла.
-
-**Запрос:**
-```json
-{
-  "parameters": {
-    "path": "src/index.js",
-    "content": "console.log('Hello World');"
-  }
-}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "path": "src/index.js",
-    "fullPath": "/absolute/path/to/src/index.js"
-  }
-}
-```
-
-**Особенности:**
-- Автоматически создаёт родительские директории
-- Перезаписывает существующий файл
-- Все операции логируются для аудита
-
-#### POST /mcp/search_in_files
-Поиск текста в файлах проекта.
-
-**Запрос:**
-```json
-{
-  "parameters": {
-    "query": "console.log",
-    "filePattern": "*.js"
-  }
-}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "matches": [
-      {
-        "file": "src/index.js",
-        "line": "console.log('Hello');",
-        "lineNumber": 5,
-        "match": "console.log"
-      }
-    ],
-    "totalMatches": 1,
-    "limitReached": false
-  }
-}
-```
-
-**Ограничения:**
-- Максимум 100 совпадений
-- Поиск регистронезависимый
-- Поддержка glob-паттернов (например: `*.js`, `**/*.css`)
-
-#### POST /mcp/delete_file
-Удаление файла.
-
-**Запрос:**
-```json
-{
-  "parameters": {
-    "path": "src/temp.js"
-  }
-}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "path": "src/temp.js",
-    "deleted": true
-  }
-}
-```
-
-**Ограничения:**
-- Можно удалять только файлы (не директории)
-- Операция необратима
-
-#### Формат ошибок
-
-Все MCP endpoints возвращают единый формат ошибок:
-
-```json
-{
-  "success": false,
-  "error": "Описание ошибки"
-}
-```
-
-**HTTP коды ошибок:**
-- `400` - Неверные параметры или небезопасный путь
-- `404` - Файл не найден
-- `408` - Таймаут операции (>30 секунд)
-- `429` - Превышен rate limit
-- `500` - Внутренняя ошибка сервера
-
-**Подробная документация:** См. [docs/flowise-mcp-workflow.md](docs/flowise-mcp-workflow.md) для руководства по использованию MCP инструментов в Flowise.
-
----
-
-## Сборка .exe
-
-```powershell
+```bash
 npm run build
 ```
 
-Результат — установщик NSIS в папке `dist/`.
+The packaged application is generated in the `dist/` directory.
 
 ---
 
-## Безопасность
+## Project Status
 
-### Архитектура
+Orcheus AI was developed as a **capstone / portfolio project**.
 
-```
-Electron Client → Backend Proxy → Flowise API
-                      │
-                      ├── Токен Flowise хранится здесь (секрет!)
-                      └── MCP Endpoints (файловые операции)
-```
+The local development setup was the primary environment used during development. Deployment of the backend and Flowise components to a remote server may require additional configuration depending on the infrastructure and network setup.
 
-### Защита
+---
 
-- **Токен Flowise скрыт** — хранится только на сервере в `backend/.env`, никогда не попадает к клиенту
-- **Авторизация через Supabase** — пароли не хранятся локально
-- **JWT verification** — сервер проверяет токен пользователя перед проксированием запроса
-- **Rate limiting** — 60 запросов в минуту на пользователя
-- **Supabase anon key** — публичный ключ, безопасен для клиента
-- **Path traversal защита** — записываемые файлы проверяются на `../` атаки (MCP endpoints)
-- **contextBridge** — renderer-процесс не имеет прямого доступа к Node.js
-- **MCP Security:**
-  - Все MCP операции требуют JWT аутентификации
-  - Защита от path traversal атак (запрещены `..`, абсолютные пути)
-  - Валидация `X-Project-Root` заголовка
-  - Ограничение размера файлов (10 МБ)
-  - Ограничение результатов поиска (100 совпадений)
-  - Таймауты операций (30 секунд)
-  - Аудит логирование всех файловых операций
-  - Запрещено удаление директорий (только файлы)
+## Documentation
+
+For the more detailed Russian documentation, including API examples and MCP endpoint descriptions, see:
+
+**[README.ru.md](README.ru.md)**
+
+---
+
+## Author
+
+**Anton Medvedev**
+
+Junior AI Integration & Automation Developer
+
+GitHub: [@Medvedev-Anton](https://github.com/Medvedev-Anton)
